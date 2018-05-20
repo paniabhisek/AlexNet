@@ -1,9 +1,15 @@
 #/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+# library modules
 import os
 import random
 
+# External library modules
+import numpy as np
+
+# local modules
+from utils import image2nparray
 import logs
 
 class LSVRC2010:
@@ -81,10 +87,51 @@ class LSVRC2010:
                 # self.image_names.append(f_{idx}.JPEG)
                 self.image_names.append(folder + '_' + str(image) + '.JPEG')
 
-    def get_image_for_1_batch(self, batch_size):
+        self.logger.info("An example training file name: %s", self.image_names[0])
+
+    def get_full_image_path(self, image_name):
         """
+        Return full image path
+        e.g. ../tiny-imagenet-200/train/n03854065/images/n03854065_297.JPEG
+
+        :param image_name: The name of the image. e.g. n03854065_297.JPEG
         """
-        pass
+        folder_name = image_name.split('_')[0]
+        return os.path.join(self.path, 'train', folder_name,
+                            'images', image_name)
+
+    def get_images_for_1_batch(self, batch_size):
+        """
+        A generator which returns `batch_size` of images in
+        a numpy array
+
+        :param batch_size: size of each batch
+        """
+        image_path = self.get_full_image_path(self.image_names[0])
+        self.logger.info("image dimension: %s",
+                         image2nparray(image_path).shape)
+
+        start = 0
+        end = batch_size
+        num_images = len(self.image_names)
+
+        while start < num_images:
+            images = []
+            # Careful for the end index
+            if end > num_images:
+                end = num_images
+
+            # Convert to numpy array for all the images in current batch
+            for i in range(start, end):
+                image_path = self.get_full_image_path(self.image_names[i])
+                images.append(image2nparray(image_path))
+                if images[0].shape != images[-1].shape:
+                    print(image_path, images[-1].shape)
+            yield np.array(images)
+
+            # Prepare for next batch
+            start += batch_size
+            end += batch_size
 
 if __name__ == '__main__':
     import argparse
@@ -94,3 +141,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     data = LSVRC2010(args.image_path)
+
+    image_cur_batch = data.get_images_for_1_batch(128)
+    data.logger.info("The first batch shape: %s", next(image_cur_batch).shape)
