@@ -79,7 +79,7 @@ class LSVRC2010:
         for folder in self.folders:
             for image in range(num_images):
                 # self.image_names.append(f_{idx}.JPEG)
-                self.image_names.append(folder + str(image) + '.JPEG')
+                self.image_names.append(folder + '_' + str(image) + '.JPEG')
 
     def get_image_for_1_batch(self, batch_size):
         """
