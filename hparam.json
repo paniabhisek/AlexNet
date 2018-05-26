@@ -1,0 +1,54 @@
+{
+    "L1":
+    {
+	"filters": 96,
+	"stride": 4,
+	"padding": "VALID",
+	"filter_size": [11, 11, 3]
+    },
+    "L1_MP":
+    {
+	"stride": 2,
+	"filter_size": [3, 3]
+    },
+    "L2":
+    {
+	"filters": 256,
+	"stride": 1,
+	"padding": "SAME",
+	"filter_size": [5, 5, 96]
+    },
+    "L2_MP":
+    {
+	"stride": 2,
+	"filter_size": [3, 3]
+    },
+    "L3":
+    {
+	"filters": 384,
+	"stride": 1,
+	"padding": "SAME",
+	"filter_size": [3, 3, 256]
+    },
+    "L4":
+    {
+	"filters": 384,
+	"stride": 1,
+	"padding": "SAME",
+	"filter_size": [3, 3, 384]
+    },
+    "L5":
+    {
+	"filters": 256,
+	"stride": 1,
+	"padding": "SAME",
+	"filter_size": [3, 3, 384]
+    },
+    "L5_MP":
+    {
+	"stride": 2,
+	"filter_size": [3, 3]
+    },
+    "FC6": 4096,
+    "FC7": 4096
+}
