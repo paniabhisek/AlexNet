@@ -126,7 +126,8 @@ class LSVRC2010:
                 image_path = self.get_full_image_path(self.image_names[i])
                 images.append(image2nparray(image_path))
                 if images[0].shape != images[-1].shape:
-                    print(image_path, images[-1].shape)
+                    self.logger.error("Image path: %s, shape: %s",
+                                      image_path, images[-1].shape)
             yield np.array(images)
 
             # Prepare for next batch
