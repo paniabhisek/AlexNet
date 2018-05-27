@@ -31,10 +31,24 @@ class LSVRC2010:
 
         self.folders = []
         self.read_folders()
+        # Use this to create one-hot encoding
+        self.folder_indices = self.get_folder_indices()
         
         self.image_names = []
         self.gen_image_names()
         random.shuffle(self.image_names)
+
+    def get_folder_indices(self):
+        """
+        Indices of the folders in the sorted folder names.
+        This will be helpful while creating one-hot encodings.
+
+        :Example:
+        >>> self.folders = ['hi', 'Alex', 'deep']
+        >>> self.get_folder_indices()
+        {'deep': 1, 'hi': 2, 'Alex': 0}
+        """
+        return dict((folder, i) for i, folder in enumerate(sorted(self.folders)))
 
     def read_categories(self):
         """
@@ -100,6 +114,67 @@ class LSVRC2010:
         return os.path.join(self.path, 'train', folder_name,
                             'images', image_name)
 
+    def get_folder_indices_for_cur_batch(self, start, end):
+        """
+        Get the indices of the folders in the current batch.
+
+        :param start: start index in `self.image_names`
+        :param end: end index in `self.image_names`. `end` won't be included.
+
+        :Example:
+        >>> self.folder_indices = {'A': 1, 'B': 0, 'C': 2,
+                'D': 4, 'E', 3}
+        >>> start == 3, end == 5
+        >>> self.image_names[3] == 'B_3.JPEG'
+        >>> self.image_names[4] == 'D_1.JPEG'
+        >>> self.get_folder_indices_for_cur_batch(3, 5)
+        np.array([0, 4])
+        """
+        findices = []
+        for i in range(start, end):
+            folder = self.image_names[i].split('_')[0]
+            findices.append(self.folder_indices[folder])
+
+        return np.array(findices)
+
+    def one_hot(self, start, end):
+        """
+        Get the one hot encoding of current
+        batch of images.
+
+        The size of the output encoding matrix
+        has to be (batch size x no of categories).
+
+        :param start: start index in `self.image_names`
+        :param end: end index in `self.image_names`. `end` won't be included.
+        """
+        batch_size = end - start
+
+        y_hat = np.zeros((batch_size, len(self.folders)))
+        folder_indices = self.get_folder_indices_for_cur_batch(start, end)
+        y_hat[np.arange(batch_size), folder_indices] = 1
+
+        return y_hat
+
+    def get_images_for_cur_batch(self, start, end):
+        """
+        Convert to numpy array for all the images in current batch
+
+        :param start: start index in `self.image_names`
+        :param end: end index in `self.image_names`. `end` won't be included.
+        """
+        images = []
+
+        for i in range(start, end):
+            image_path = self.get_full_image_path(self.image_names[i])
+            images.append(image2nparray(image_path))
+
+            if images[0].shape != images[-1].shape:
+                self.logger.error("Image path: %s, shape: %s",
+                                  image_path, images[-1].shape)
+
+        return np.array(images)
+
     def get_images_for_1_batch(self, batch_size):
         """
         A generator which returns `batch_size` of images in
@@ -116,23 +191,22 @@ class LSVRC2010:
         num_images = len(self.image_names)
 
         while start < num_images:
-            images = []
             # Careful for the end index
             if end > num_images:
                 end = num_images
 
-            # Convert to numpy array for all the images in current batch
-            for i in range(start, end):
-                image_path = self.get_full_image_path(self.image_names[i])
-                images.append(image2nparray(image_path))
-                if images[0].shape != images[-1].shape:
-                    self.logger.error("Image path: %s, shape: %s",
-                                      image_path, images[-1].shape)
-            yield np.array(images)
+            images = self.get_images_for_cur_batch(start, end)
+            y_hat = self.one_hot(start, end)
+
+            yield images, y_hat
 
             # Prepare for next batch
             start += batch_size
             end += batch_size
+
+        self.logger.warning("Start idx: %d, Total no images: %d",
+                            start, num_images)
+        raise StopIteration
 
 if __name__ == '__main__':
     import argparse
@@ -144,4 +218,6 @@ if __name__ == '__main__':
     data = LSVRC2010(args.image_path)
 
     image_cur_batch = data.get_images_for_1_batch(128)
-    data.logger.info("The first batch shape: %s", next(image_cur_batch).shape)
+    first_batch = next(image_cur_batch)
+    data.logger.info("The first batch shape: %s", first_batch[0].shape)
+    data.logger.info("The first one hot vector shape: %s", first_batch[1].shape)
