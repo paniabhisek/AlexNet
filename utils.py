@@ -5,18 +5,23 @@
 from PIL import Image
 import numpy as np
 
-def image2nparray(image):
+def image2nparray(image, size=None):
     """
     Converts an image to numpy data.
     If it is greyscale image, then convert it to RGB first
     and then change to numpy array
 
     :param image: path to the image file
+    :param size: If given reshape the image to this size.
     """
     img = Image.open(image)
+
     if img.mode == 'L':
         img = img.convert('RGB')
+    if size:
+        img = img.resize(size)
     img.load()
+
     return np.asarray(img, dtype = "int32")
 
 if __name__ == '__main__':
@@ -26,4 +31,6 @@ if __name__ == '__main__':
                         help = 'ImageNet dataset path')
     args = parser.parse_args()
     im = image2nparray(args.image_path)
-    print(im.shape)
+    print("Without reshaping, size:", im.shape)
+    im = image2nparray(args.image_path, (127, 127))
+    print("After reshaping, size:", im.shape)

@@ -156,7 +156,7 @@ class LSVRC2010:
 
         return y_hat
 
-    def get_images_for_cur_batch(self, start, end):
+    def get_images_for_cur_batch(self, start, end, img_size):
         """
         Convert to numpy array for all the images in current batch
 
@@ -167,7 +167,7 @@ class LSVRC2010:
 
         for i in range(start, end):
             image_path = self.get_full_image_path(self.image_names[i])
-            images.append(image2nparray(image_path))
+            images.append(image2nparray(image_path, img_size))
 
             if images[0].shape != images[-1].shape:
                 self.logger.error("Image path: %s, shape: %s",
@@ -175,7 +175,7 @@ class LSVRC2010:
 
         return np.array(images)
 
-    def get_images_for_1_batch(self, batch_size):
+    def get_images_for_1_batch(self, batch_size, img_size):
         """
         A generator which returns `batch_size` of images in
         a numpy array
@@ -195,7 +195,7 @@ class LSVRC2010:
             if end > num_images:
                 end = num_images
 
-            images = self.get_images_for_cur_batch(start, end)
+            images = self.get_images_for_cur_batch(start, end, img_size)
             y_hat = self.one_hot(start, end)
 
             yield images, y_hat
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     data = LSVRC2010(args.image_path)
 
-    image_cur_batch = data.get_images_for_1_batch(128)
+    image_cur_batch = data.get_images_for_1_batch(128, (227, 227))
     first_batch = next(image_cur_batch)
     data.logger.info("The first batch shape: %s", first_batch[0].shape)
     data.logger.info("The first one hot vector shape: %s", first_batch[1].shape)
