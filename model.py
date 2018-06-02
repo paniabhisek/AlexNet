@@ -44,6 +44,8 @@ class AlexNet:
         """
         self.input_image = tf.placeholder(tf.float32, shape=self.input_shape,
                                           name='input_image')
+        self.labels = tf.placeholder(tf.int32, shape=self.output_shape,
+                                     name='output')
 
     def init_hyper_param(self):
         """
@@ -78,7 +80,7 @@ class AlexNet:
         layer = 'L' + str(layer_num)
 
         stride = self.hyper_param[layer]['stride']
-        strides = [stride, stride, 1, 1]
+        strides = [1, stride, stride, 1]
 
         return strides
 
@@ -173,7 +175,7 @@ class AlexNet:
         # loss function
         loss_function = tf.nn.softmax_cross_entropy_with_logits(
             logits = self.logits,
-            labels = np.zeros((1000, 1))
+            labels = self.labels
         )
 
         # total loss
