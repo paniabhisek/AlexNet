@@ -3,12 +3,15 @@
 
 # library modules
 import json
+import time
+import os
 
 # External library modules
 import tensorflow as tf
 import numpy as np
 
 # local modules
+from data import LSVRC2010
 import logs
 
 class AlexNet:
@@ -17,15 +20,19 @@ class AlexNet:
     `AlexNet <https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf>`_
     """
 
-    def __init__(self):
+    def __init__(self, path):
         """
         Build the AlexNet model
         """
         self.logger = logs.get_logger()
 
+        self.path = path
+        self.lsvrc2010 = LSVRC2010(self.path)
+        self.num_classes = len(self.lsvrc2010.folders)
+
         self.learning_rate = 0.01
-        self.num_classes = 1000
         self.input_shape = (None, 227, 227, 3)
+        self.output_shape = (128, 200)
 
         self.logger.info("Creating placeholders for graph...")
         self.create_tf_placeholders()
@@ -33,9 +40,6 @@ class AlexNet:
         self.logger.info("Initialize hyper parameters...")
         self.hyper_param = {}
         self.init_hyper_param()
-
-        self.logger.info("Building the graph...")
-        self.build_graph()
 
     def create_tf_placeholders(self):
         """
@@ -183,11 +187,63 @@ class AlexNet:
 
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
-    def train(self):
-        raise NotImplementedError
+        correct = tf.equal(tf.argmax(self.logits, 1), tf.argmax(self.labels, 1))
+        self.accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+
+    def train(self, batch_size, epochs):
+        """
+        Train AlexNet.
+        """
+        batches = self.lsvrc2010.get_images_for_1_batch(batch_size,
+                                                        self.input_shape[1:3])
+
+        self.logger.info("Building the graph...")
+        self.build_graph()
+
+        init = tf.global_variables_initializer()
+
+        saver = tf.train.Saver()
+        with tf.Session() as sess:
+            sess.run(init)
+
+            losses = []
+            best_loss = float('inf')
+            accuracies = []
+            for epoch in range(epochs):
+                for batch_i, cur_batch in enumerate(batches):
+                    start = time.time()
+                    _, loss, acc = sess.run([self.optimizer, self.loss, self.accuracy],
+                                            feed_dict = {
+                                                self.input_image: cur_batch[0],
+                                                self.labels: cur_batch[1]
+                                            })
+                    end = time.time()
+
+                    losses.append(loss)
+                    accuracies.append(acc)
+                    self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f Accuracy: %f",
+                                     end - start, epoch, batch_i,
+                                     sum(losses) / len(losses),
+                                     sum(accuracies) / len(accuracies))
+
+                cur_loss = sum(losses) / len(losses)
+                if cur_loss < best_loss:
+                    model_base_path = os.path.join(os.getcwd(), 'model')
+                    if not os.path.exists(model_base_path):
+                        os.mkdir(model_base_path)
+                    model_save_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
+                    save_path = saver.save(sess, model_save_path)
+                    self.logger.info("Batch %d Model saved in path: %s", epoch, save_path)
 
     def test(self):
         raise NotImplementedError
 
 if __name__ == '__main__':
-    AlexNet()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('image_path', metavar = 'image-path',
+                        help = 'ImageNet dataset path')
+    args = parser.parse_args()
+
+    alexnet = AlexNet(args.image_path)
+    alexnet.train(128, 100)

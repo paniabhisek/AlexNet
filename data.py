@@ -4,13 +4,13 @@
 # library modules
 import os
 import random
+import logging
 
 # External library modules
 import numpy as np
 
 # local modules
 from utils import image2nparray
-import logs
 
 class LSVRC2010:
     """
@@ -23,7 +23,7 @@ class LSVRC2010:
 
         :param path: The directory path for the ILSVRC2010 training data
         """
-        self.logger = logs.get_logger()
+        self.logger = logging.getLogger('AlexNet.LSVRC2010')
         self.path = path
 
         self.categories = {}
