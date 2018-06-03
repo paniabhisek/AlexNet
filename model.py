@@ -32,7 +32,7 @@ class AlexNet:
 
         self.learning_rate = 0.01
         self.input_shape = (None, 227, 227, 3)
-        self.output_shape = (128, 200)
+        self.output_shape = (None, self.num_classes)
 
         self.logger.info("Creating placeholders for graph...")
         self.create_tf_placeholders()
