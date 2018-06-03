@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import sys
 
 def get_logger():
     logger = logging.getLogger('AlexNet')
@@ -10,7 +11,7 @@ def get_logger():
     fh = logging.FileHandler('logs.log')
     fh.setLevel(logging.DEBUG)
 
-    ch = logging.StreamHandler()
+    ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
