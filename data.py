@@ -96,10 +96,11 @@ class LSVRC2010:
         self.logger.info("The training dataset has %d images in each category",
                          num_images)
 
+        train_path = os.path.join(self.path, 'train')
         for folder in self.folders:
-            for image in range(num_images):
+            for image in os.listdir(os.path.join(train_path, folder, 'images')):
                 # self.image_names.append(f_{idx}.JPEG)
-                self.image_names.append(folder + '_' + str(image) + '.JPEG')
+                self.image_names.append(image)
 
         self.logger.info("An example training file name: %s", self.image_names[0])
 
