@@ -194,8 +194,6 @@ class AlexNet:
         """
         Train AlexNet.
         """
-        batches = self.lsvrc2010.get_images_for_1_batch(batch_size,
-                                                        self.input_shape[1:3])
 
         self.logger.info("Building the graph...")
         self.build_graph()
@@ -206,10 +204,13 @@ class AlexNet:
         with tf.Session() as sess:
             sess.run(init)
 
-            losses = []
             best_loss = float('inf')
-            accuracies = []
             for epoch in range(epochs):
+                losses = []
+                accuracies = []
+
+                batches = self.lsvrc2010.get_images_for_1_batch(batch_size,
+                                                                self.input_shape[1:3])
                 for batch_i, cur_batch in enumerate(batches):
                     start = time.time()
                     _, loss, acc = sess.run([self.optimizer, self.loss, self.accuracy],
@@ -228,12 +229,13 @@ class AlexNet:
 
                 cur_loss = sum(losses) / len(losses)
                 if cur_loss < best_loss:
+                    best_loss = cur_loss
                     model_base_path = os.path.join(os.getcwd(), 'model')
                     if not os.path.exists(model_base_path):
                         os.mkdir(model_base_path)
                     model_save_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
                     save_path = saver.save(sess, model_save_path)
-                    self.logger.info("Batch %d Model saved in path: %s", epoch, save_path)
+                    self.logger.info("Epoch %d Model saved in path: %s", epoch, save_path)
 
     def test(self):
         raise NotImplementedError
