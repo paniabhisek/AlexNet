@@ -16,7 +16,7 @@ def image2nparray(image, size=None):
     """
     img = Image.open(image)
 
-    if img.mode == 'L':
+    if img.mode != 'RGB':
         img = img.convert('RGB')
     if size:
         img = img.resize(size)
