@@ -36,7 +36,6 @@ class LSVRC2010:
         
         self.image_names = []
         self.gen_image_names()
-        random.shuffle(self.image_names)
 
     def get_folder_indices(self):
         """
@@ -183,6 +182,8 @@ class LSVRC2010:
 
         :param batch_size: size of each batch
         """
+        random.shuffle(self.image_names)
+
         image_path = self.get_full_image_path(self.image_names[0])
         self.logger.info("image dimension: %s",
                          image2nparray(image_path).shape)
