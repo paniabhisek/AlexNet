@@ -168,12 +168,22 @@ class AlexNet:
         l6_FC = tf.contrib.layers.fully_connected(flatten,
                                                   self.hyper_param['FC6'])
 
+        # Dropout layer
+        l6_keep_prob = tf.Variable(0.5, tf.float32)
+        l6_dropout = tf.nn.dropout(l6_FC, l6_keep_prob,
+                                   name='l6_dropout')
+
         # Layer 7 Fully connected layer
-        l7_FC = tf.contrib.layers.fully_connected(l6_FC,
+        l7_FC = tf.contrib.layers.fully_connected(l6_dropout,
                                                   self.hyper_param['FC7'])
 
+        # Dropout layer
+        l7_keep_prob = tf.Variable(0.5, tf.float32)
+        l7_dropout = tf.nn.dropout(l7_FC, l7_keep_prob,
+                                   name='l7_dropout')
+
         # final layer before softmax
-        self.logits = tf.contrib.layers.fully_connected(l7_FC,
+        self.logits = tf.contrib.layers.fully_connected(l7_dropout,
                                                         self.num_classes)
 
         # loss function
