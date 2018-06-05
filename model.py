@@ -169,7 +169,7 @@ class AlexNet:
                                                   self.hyper_param['FC6'])
 
         # Layer 7 Fully connected layer
-        l7_FC = tf.contrib.layers.fully_connected(flatten,
+        l7_FC = tf.contrib.layers.fully_connected(l6_FC,
                                                   self.hyper_param['FC7'])
 
         # final layer before softmax
