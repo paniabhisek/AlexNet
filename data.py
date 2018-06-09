@@ -10,7 +10,8 @@ import logging
 import numpy as np
 
 # local modules
-from utils import image2nparray
+from utils import image2PIL
+from data_augment import augment
 
 class LSVRC2010:
     """
@@ -89,6 +90,9 @@ class LSVRC2010:
         """
         If there are 1000 images in folder `f`, then all
         images inside `f` are  `f_0.JPEG`, `f_1.JPEG`, ..., `f_999.JPEG`.
+        But not necessarily as `0, 1, 2, ...`(increasing order from 0).
+        So better to read what files are present in `f` rather than just
+        assuming that all files are present in increasing order.
         """
         # Number of images in a single training folder
         num_images = self.num_images_in_a_folder
@@ -114,12 +118,16 @@ class LSVRC2010:
         return os.path.join(self.path, 'train', folder_name,
                             'images', image_name)
 
-    def get_folder_indices_for_cur_batch(self, start, end):
+    def get_folder_indices_for_cur_batch(self, start, end, times):
         """
         Get the indices of the folders in the current batch.
+        For each image you'll have `:py:times:` number of total
+        images after doing *data augmentation*.
 
         :param start: start index in `self.image_names`
         :param end: end index in `self.image_names`. `end` won't be included.
+        :param times: Total number of images for each image after
+                      data augmentation.
 
         :Example:
         >>> self.folder_indices = {'A': 1, 'B': 0, 'C': 2,
@@ -133,32 +141,36 @@ class LSVRC2010:
         findices = []
         for i in range(start, end):
             folder = self.image_names[i].split('_')[0]
-            findices.append(self.folder_indices[folder])
+            findices.extend([self.folder_indices[folder]] * times)
 
         return np.array(findices)
 
-    def one_hot(self, start, end):
+    def one_hot(self, start, end, times):
         """
         Get the one hot encoding of current
-        batch of images.
+        batch of images. For each image reserve total `:py:times:`
+        space due to data augmentation.
 
         The size of the output encoding matrix
         has to be (batch size x no of categories).
 
         :param start: start index in `self.image_names`
         :param end: end index in `self.image_names`. `end` won't be included.
+        :param times: Total number of one hot for each image after
+                      data augmentation.
         """
         batch_size = end - start
 
-        y_hat = np.zeros((batch_size, len(self.folders)))
-        folder_indices = self.get_folder_indices_for_cur_batch(start, end)
-        y_hat[np.arange(batch_size), folder_indices] = 1
+        y_hat = np.zeros((batch_size * times, len(self.folders)))
+        folder_indices = self.get_folder_indices_for_cur_batch(start, end, times)
+        y_hat[np.repeat(np.arange(batch_size), times), folder_indices] = 1
 
         return y_hat
 
     def get_images_for_cur_batch(self, start, end, img_size):
         """
-        Convert to numpy array for all the images in current batch
+        Convert to numpy array for all the images in current batch.
+        For each image do data augmentation.
 
         :param start: start index in `self.image_names`
         :param end: end index in `self.image_names`. `end` won't be included.
@@ -167,7 +179,8 @@ class LSVRC2010:
 
         for i in range(start, end):
             image_path = self.get_full_image_path(self.image_names[i])
-            images.append(image2nparray(image_path, img_size))
+            image = image2PIL(image_path)
+            images.extend(augment(image, img_size))
 
             if images[0].shape != images[-1].shape:
                 self.logger.error("Image path: %s, shape: %s",
@@ -185,8 +198,8 @@ class LSVRC2010:
         random.shuffle(self.image_names)
 
         image_path = self.get_full_image_path(self.image_names[0])
-        self.logger.info("image dimension: %s",
-                         image2nparray(image_path).shape)
+        # self.logger.info("image dimension: %s",
+        #                 image2nparray(image_path).shape)
 
         start = 0
         end = batch_size
@@ -198,7 +211,8 @@ class LSVRC2010:
                 end = num_images
 
             images = self.get_images_for_cur_batch(start, end, img_size)
-            y_hat = self.one_hot(start, end)
+            y_hat = self.one_hot(start, end,
+                                 len(images) // (end - start))
 
             yield images, y_hat
 

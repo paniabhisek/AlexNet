@@ -5,6 +5,21 @@
 from PIL import Image
 import numpy as np
 
+def image2PIL(image):
+    """
+    Converts an image to a pillow object.
+    If it is greyscale image, then convert it to RGB first
+
+    :param image: path to the image file
+    """
+    img = Image.open(image)
+
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+    img.load()
+
+    return img
+
 def image2nparray(image, size=None):
     """
     Converts an image to numpy data.
@@ -23,6 +38,21 @@ def image2nparray(image, size=None):
     img.load()
 
     return np.asarray(img, dtype = "int32")
+
+def imgs2np(function):
+    """
+    Convert list of pillow images to its numpy equivalent.
+    """
+
+    def wrapper(*args, **kwargs):
+        images = function(*args, **kwargs)
+
+        for i, image in enumerate(images):
+            images[i] = np.asarray(image, dtype=np.int32)
+
+        return images
+
+    return wrapper
 
 if __name__ == '__main__':
     import argparse

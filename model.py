@@ -258,4 +258,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     alexnet = AlexNet(args.image_path)
-    alexnet.train(128, 100)
+    alexnet.train(16, 100)
