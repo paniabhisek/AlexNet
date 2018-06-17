@@ -247,6 +247,45 @@ class AlexNet:
                     save_path = saver.save(sess, model_save_path)
                     self.logger.info("Epoch %d Model saved in path: %s", epoch, save_path)
 
+    def validation(self, batch_size):
+        """
+        Validate the trained model
+        """
+        model_saved_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
+        self.logger.info("Building the graph...")
+        self.build_graph()
+
+        init = tf.global_variables_initializer()
+
+        saver = tf.train.Saver()
+        with tf.Session() as sess:
+            sess.run(init)
+
+            saver.restore(sess, model_saved_path)
+
+            losses = []
+            accuracies = []
+
+            batches = self.lsvrc2010.get_images_for_1_batch_val(batch_size,
+                                                                self.input_shape[1:3])
+
+            for batch_i, cur_batch in enumerate(batches):
+                start = time.time()
+
+                loss, acc = sess.run([self.loss, self.accuracy],
+                                        feed_dict = {
+                                            self.input_image: cur_batch[0],
+                                            self.labels: cur_batch[1]
+                                        })
+                end = time.time()
+
+                losses.append(loss)
+                accuracies.append(acc)
+                self.logger.info("Time: %f Batch: %d Loss: %f Accuracy: %f",
+                                 end - start, batch_i,
+                                 sum(losses) / len(losses),
+                                 sum(accuracies) / len(accuracies))
+
     def test(self):
         raise NotImplementedError
 
@@ -255,7 +294,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('image_path', metavar = 'image-path',
                         help = 'ImageNet dataset path')
+    parser.add_argument('train',
+                        help = 'Train AlexNet')
+    parser.add_argument('val',
+                        help = 'Run Validation on AlexNet')
     args = parser.parse_args()
 
     alexnet = AlexNet(args.image_path)
-    alexnet.train(16, 100)
+    if args.train == 'true':
+        alexnet.train(16, 100)
+    if args.val == 'true':
+        alexnet.validation(128)
