@@ -237,10 +237,11 @@ class AlexNet:
                     accuracies.append(acc)
                     if batch_i % batch_step == 0:
                         end = time.time()
-                        self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f Accuracy: %f",
+                        self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f "
+                                         "Avg loss: %f Accuracy: %f Avg Accuracy: %f",
                                          end - start, epoch, batch_i,
-                                         sum(losses) / len(losses),
-                                         sum(accuracies) / len(accuracies))
+                                         loss, sum(losses) / len(losses),
+                                         acc, sum(accuracies) / len(accuracies))
                         start = time.time()
 
                 cur_loss = sum(losses) / len(losses)
