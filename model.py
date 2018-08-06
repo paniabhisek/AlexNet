@@ -203,6 +203,19 @@ class AlexNet:
         correct = tf.equal(tf.argmax(self.logits, 1), tf.argmax(self.labels, 1))
         self.accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
+    def save_model(self, sess, saver):
+        """
+        Save the current model
+
+        :param sess: Session object
+        :param saver: Saver object responsible to store
+        """
+        model_base_path = os.path.join(os.getcwd(), 'model')
+        if not os.path.exists(model_base_path):
+            os.mkdir(model_base_path)
+        model_save_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
+        save_path = saver.save(sess, model_save_path)
+        self.logger.info("Model saved in path: %s", save_path)
 
     def train(self, epochs, thread='false'):
         """
@@ -244,54 +257,20 @@ class AlexNet:
                                          acc, sum(accuracies) / len(accuracies))
                         start = time.time()
 
-                cur_loss = sum(losses) / len(losses)
-                if cur_loss < best_loss:
-                    best_loss = cur_loss
-                    model_base_path = os.path.join(os.getcwd(), 'model')
-                    if not os.path.exists(model_base_path):
-                        os.mkdir(model_base_path)
-                    model_save_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
-                    save_path = saver.save(sess, model_save_path)
-                    self.logger.info("Epoch %d Model saved in path: %s", epoch, save_path)
+                    if batch_i % val_step == 0:
+                        images_val, labels_val = self.lsvrc2010.get_batch_val
+                        loss, acc = sess.run([self.loss, self.accuracy],
+                                             feed_dict = {
+                                                 self.input_image: images,
+                                                 self.labels: labels
+                                             })
+                        self.logger.info("===================Validation===================")
+                        self.logger.info("Loss: %f Accuracy: %f", loss, acc)
 
-    def validation(self, batch_size):
-        """
-        Validate the trained model
-        """
-        model_saved_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
-        self.logger.info("Building the graph...")
-        self.build_graph()
-
-        init = tf.global_variables_initializer()
-
-        saver = tf.train.Saver()
-        with tf.Session() as sess:
-            sess.run(init)
-
-            saver.restore(sess, model_saved_path)
-
-            losses = []
-            accuracies = []
-
-            batches = self.lsvrc2010.get_images_for_1_batch_val(batch_size,
-                                                                self.input_shape[1:3])
-
-            for batch_i, cur_batch in enumerate(batches):
-                start = time.time()
-
-                loss, acc = sess.run([self.loss, self.accuracy],
-                                        feed_dict = {
-                                            self.input_image: cur_batch[0],
-                                            self.labels: cur_batch[1]
-                                        })
-                end = time.time()
-
-                losses.append(loss)
-                accuracies.append(acc)
-                self.logger.info("Time: %f Batch: %d Loss: %f Accuracy: %f",
-                                 end - start, batch_i,
-                                 sum(losses) / len(losses),
-                                 sum(accuracies) / len(accuracies))
+                        cur_loss = sum(losses) / len(losses)
+                        if cur_loss < best_loss:
+                            best_loss = cur_loss
+                            self.save_model(sess, saver)
 
     def test(self):
         raise NotImplementedError
