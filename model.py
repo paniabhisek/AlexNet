@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 # library modules
-from queue import Queue
 from math import ceil
 import json
 import time
@@ -23,15 +22,16 @@ class AlexNet:
     `AlexNet <https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf>`_
     """
 
-    def __init__(self, path):
+    def __init__(self, path, batch_size):
         """
         Build the AlexNet model
         """
         self.logger = logs.get_logger()
 
         self.path = path
-        self.lsvrc2010 = LSVRC2010(self.path)
-        self.num_classes = len(self.lsvrc2010.folders)
+        self.batch_size = batch_size
+        self.lsvrc2010 = LSVRC2010(self.path, batch_size)
+        self.num_classes = len(self.lsvrc2010.wnid2label)
 
         self.learning_rate = 0.01
         self.input_shape = (None, 227, 227, 3)
@@ -43,8 +43,6 @@ class AlexNet:
         self.logger.info("Initialize hyper parameters...")
         self.hyper_param = {}
         self.init_hyper_param()
-
-        self.queue = Queue(10)
 
     def create_tf_placeholders(self):
         """
@@ -205,43 +203,12 @@ class AlexNet:
         correct = tf.equal(tf.argmax(self.logits, 1), tf.argmax(self.labels, 1))
         self.accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-    def produce(self, batch_size):
-        '''
-        Read the images from the disk in a separate thread
-        and put it in a Queue. Wait if the Queue is full
-        '''
-        batches = self.lsvrc2010.get_images_for_1_batch(batch_size,
-                                                        self.input_shape[1:3])
-        for i, cur_batch in enumerate(batches):
-            self.queue.put(cur_batch)
 
-    def consume(self):
-        '''
-        Take one batch of image from the queue.
-        '''
-        while self.queue.empty():
-            time.sleep(1)
-        return self.queue.get()
-
-    def get_next_batch(self, batch_size, thread='false'):
-        '''
-        Get next batch of image.
-        '''
-        total_batches = ceil(len(self.lsvrc2010.image_names) / batch_size)
-        if thread != 'true':
-            batches = self.lsvrc2010.get_images_for_1_batch(batch_size,
-                                                            self.input_shape[1:3])
-
-        for i in range(total_batches):
-            if thread == 'true':
-                yield self.consume()
-            else:
-                yield next(batches)
-
-    def train(self, batch_size, epochs, thread='false'):
+    def train(self, epochs, thread='false'):
         """
         Train AlexNet.
         """
+        batch_step, val_step = 10, 500
 
         self.logger.info("Building the graph...")
         self.build_graph()
@@ -254,31 +221,26 @@ class AlexNet:
 
             best_loss = float('inf')
             for epoch in range(epochs):
-                pt = None       # Producer thread
-                if thread == 'true':
-                    pt = threading.Thread(target=self.produce, args=(batch_size,))
-                    pt.start()
                 losses = []
                 accuracies = []
 
                 start = time.time()
-                batch_gen = self.get_next_batch(batch_size, thread)
-                for batch_i, cur_batch in enumerate(batch_gen):
+                gen_batch = self.lsvrc2010.gen_batch
+                for batch_i, (images, labels) in enumerate(gen_batch):
                     _, loss, acc = sess.run([self.optimizer, self.loss, self.accuracy],
                                             feed_dict = {
-                                                self.input_image: cur_batch[0],
-                                                self.labels: cur_batch[1]
+                                                self.input_image: images,
+                                                self.labels: labels
                                             })
 
                     losses.append(loss)
                     accuracies.append(acc)
-                    if batch_i % 10 == 0:
+                    if batch_i % batch_step == 0:
                         end = time.time()
                         self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f Accuracy: %f",
                                          end - start, epoch, batch_i,
                                          sum(losses) / len(losses),
                                          sum(accuracies) / len(accuracies))
-                        self.logger.info("Queue size: %d", self.queue.qsize())
                         start = time.time()
 
                 cur_loss = sum(losses) / len(losses)
@@ -290,8 +252,6 @@ class AlexNet:
                     model_save_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
                     save_path = saver.save(sess, model_save_path)
                     self.logger.info("Epoch %d Model saved in path: %s", epoch, save_path)
-                if thread == 'true':
-                    pt.join()
 
     def validation(self, batch_size):
         """
@@ -348,8 +308,8 @@ if __name__ == '__main__':
                         help = 'Consume images in separate thread')
     args = parser.parse_args()
 
-    alexnet = AlexNet(args.image_path)
+    alexnet = AlexNet(args.image_path, 512)
     if args.train == 'true':
-        alexnet.train(16, 100, thread=args.threading)
+        alexnet.train(16, thread=args.threading)
     if args.val == 'true':
         alexnet.validation(128)

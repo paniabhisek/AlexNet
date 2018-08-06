@@ -3,48 +3,78 @@
 
 # library modules
 import os
-import random
 import logging
+
+from collections import namedtuple
+from random import shuffle
+from random import sample
+from math import ceil
 
 # External library modules
 import numpy as np
+
 from scipy.io import loadmat
+from PIL import Image
 
 # local modules
-from utils import image2PIL, image2nparray
+from utils import preprocess
+from utils import gen_mean_activity
 from data_augment import augment
 
 class LSVRC2010:
     """
     Read the train data of ILSVRC2010.
+
+    Considering the :py:path: is `~/datasets/ILSVRC2010`
+    this class assumes the folder structure as follows
+
+    |____devkit-1.0
+    | |____data
+    | | |____ILSVRC2010_validation_ground_truth.txt
+    | | |____meta.mat
+    |____ILSVRC2010_img_train
+    | |____n01443537
+    | | |____n01443537_1.JPEG
+    |____ILSVRC2010_img_val
+    | |____ILSVRC2010_val_00000001.JPEG
     """
 
-    def __init__(self, path):
+    def __init__(self, path, batch_size, augment=False):
         """
         Find which folder has what kind of images
+        Find which image belongs to which folder and what category.
 
         :param path: The directory path for the ILSVRC2010 training data
         """
         self.logger = logging.getLogger('AlexNet.LSVRC2010')
-        self.path = path
+        self.batch_size = batch_size
+        self.augment = augment
+        self.image_size = (227, 227, 3)
 
-        self.categories = {}
-        self.read_categories()
+        # Directory paths
+        self.base_dir = path
+        self.train_dir = os.path.join(path, 'ILSVRC2010_img_train')
+        self.val_dir = os.path.join(path, 'ILSVRC2010_img_val')
 
-        self.folders = []
-        self.read_folders()
-        # Use this to create one-hot encoding
-        self.folder_indices = self.get_folder_indices()
-        
-        self.image_names = []
-        self.gen_image_names()
+        # Store the folder name to label info
+        self.wnid2label = {}
+        self.gen_labels()
 
-        self.val_images = []
-        self.image_to_folder_val = {}
+        self.lsvrcid2wnid = {}
+        self.store_lsvrcid2wnid()
 
-    def get_folder_indices(self):
+        self.image_names = {}
+        self.find_image_names()
+
+        self.image_names_val = {}
+        self.find_image_names_val()
+
+        if not os.path.exists('mean.pkl'):
+            gen_mean_activity(self.train_dir)
+
+    def gen_labels(self):
         """
-        Indices of the folders in the sorted folder names.
+        Store the folder to label map in a dict.
         This will be helpful while creating one-hot encodings.
 
         :Example:
@@ -52,321 +82,162 @@ class LSVRC2010:
         >>> self.get_folder_indices()
         {'deep': 1, 'hi': 2, 'Alex': 0}
         """
-        return dict((folder, i) for i, folder in enumerate(sorted(self.folders)))
+        self.wnid2label = dict((folder, i) for i, folder in enumerate(sorted(os.listdir(self.train_dir))))
+        self.logger.info("There are %d categories in total", len(self.wnid2label))
 
-    def read_categories(self):
+    def store_lsvrcid2wnid(self):
         """
-        For a folder name store which categories
-        of images are present
+        Store the mapping of ILSVRC2010_ID to WNID
 
-        e.g. `self.categories['n00129435'] = ['roller']` means
-        inside the folder 'n00129435', every image is a 'roller'
-        """
-        category_file = os.path.join(self.path, 'words.txt')
-        with open(category_file) as c:
-            for line in c:
-                folder_name, _categories = line.split('\t')
-                categories = list(map(lambda x: x.strip(), _categories.split(',')))
-                self.categories[folder_name] = categories
-        self.logger.info("There are %d categories in total", len(self.categories))
+        Fore more information about what ILSVRC2010_ID
+        and WNID is please read the devkit-1.0 readme
+        that you can find for ILSVRC2010.
+        Fore short, WNID are the folder names in the training
+        folder and ILSVRC2010_ID is an id that is assigned
+        to each folder category to uniquely identify the category
+        for that folder
 
-    def read_folders(self):
+        After running this you should have
+        >>> self.lsvrcid2wnid[330] == 'n01910747'
         """
-        Find what all folder name's are present in the
-        dataset.
-        """
-        wnids_file = os.path.join(self.path, 'wnids.txt')
-        with open(wnids_file) as w:
-            self.folders = list(map(lambda x: x.strip(), w.readlines()))
-        self.logger.info("There are %d categories present in the dataset", len(self.folders))
+        mat = loadmat(os.path.join(self.base_dir, 'devkit-1.0',
+                                   'data', 'meta.mat'))
+        synsets = mat['synsets']
 
-    @property
-    def num_images_in_a_folder(self):
-        """
-        Return number of images present in one folder
-        of training set.
-        """
-        image_path = os.path.join(self.path, 'train',
-                                  self.folders[0], 'images')
-        return len(os.listdir(image_path))
+        for i in range(len(synsets)):
+            self.lsvrcid2wnid[synsets[i][0][0][0][0]] = str(synsets[i][0][1][0])
 
-    def gen_image_names(self):
+    def find_image_names(self):
         """
+        Find category information for all training images.
+
+        For all images that is present in the training directory
+        find which WNID(folder) and label that image belongs to
+        and store it in :py:self.image_names:
+
         If there are 1000 images in folder `f`, then all
         images inside `f` are  `f_0.JPEG`, `f_1.JPEG`, ..., `f_999.JPEG`.
         But not necessarily as `0, 1, 2, ...`(increasing order from 0).
         So better to read what files are present in `f` rather than just
         assuming that all files are present in increasing order.
         """
-        # Number of images in a single training folder
-        num_images = self.num_images_in_a_folder
-        self.logger.info("The training dataset has %d images in each category",
-                         num_images)
+        # Each folder belongs to a folder and corresponding label
+        # This label will represent the number in output softmax
+        # in the AlexNet graph
+        category = namedtuple('Category', ['folder', 'label'])
+        for folder in os.listdir(self.train_dir):
+            for image in os.listdir(os.path.join(self.train_dir, folder)):
+                self.image_names[image] = category(folder, self.wnid2label[folder])
 
-        train_path = os.path.join(self.path, 'train')
-        for folder in self.folders:
-            for image in os.listdir(os.path.join(train_path, folder, 'images')):
-                # self.image_names.append(f_{idx}.JPEG)
-                self.image_names.append(image)
+        self.logger.info("There are %d total training images in the dataset",
+                         len(self.image_names))
 
-        self.logger.info("An example training file name: %s", self.image_names[0])
+    def find_image_names_val(self):
+        """
+        Find the label of each validation image
+        """
+        with open(os.path.join(self.base_dir, 'devkit-1.0', 'data',
+                               'ILSVRC2010_validation_ground_truth.txt')) as f:
+            for image, lsvrcid in zip(sorted(os.listdir(self.val_dir)), f):
+                self.image_names_val[image] = \
+                    self.wnid2label[self.lsvrcid2wnid[int(lsvrcid.strip())]]
 
-    def get_full_image_path(self, image_name):
+    def image_path(self, image_name, val=False):
         """
         Return full image path
-        e.g. ../tiny-imagenet-200/train/n03854065/images/n03854065_297.JPEG
+        e.g. ~/datasets/ILSVRC2010/ILSVRC2010_img_train/n03854065/n03854065_297.JPEG
+        or
+        e.g. ~/datasets/ILSVRC2010/ILSVRC2010_img_val/ILSVRC2010_val_00000303.JPEG
 
         :param image_name: The name of the image. e.g. n03854065_297.JPEG
         """
-        folder_name = image_name.split('_')[0]
-        return os.path.join(self.path, 'train', folder_name,
-                            'images', image_name)
+        if val:
+            return os.path.join(self.val_dir,
+                                image_name)
+        return os.path.join(self.train_dir,
+                            self.image_names[image_name].folder,
+                            image_name)
 
-    def get_full_image_path_val(self, image_name):
+    def one_hot(self, labels):
         """
-        Return full image path
-        e.g. ../tiny-imagenet-200/train/n03854065_303.JPEG
-
-        :param image_name: The name of the image. e.g. n03854065_303.JPEG
-        """
-        return os.path.join(self.path, 'val', image_name)
-
-    def get_folder_indices_for_cur_batch(self, start, end, times):
-        """
-        Get the indices of the folders in the current batch.
-        For each image you'll have `:py:times:` number of total
-        images after doing *data augmentation*.
-
-        :param start: start index in `self.image_names`
-        :param end: end index in `self.image_names`. `end` won't be included.
-        :param times: Total number of images for each image after
-                      data augmentation.
-
-        :Example:
-        >>> self.folder_indices = {'A': 1, 'B': 0, 'C': 2,
-                'D': 4, 'E', 3}
-        >>> start == 3, end == 5
-        >>> self.image_names[3] == 'B_3.JPEG'
-        >>> self.image_names[4] == 'D_1.JPEG'
-        >>> self.get_folder_indices_for_cur_batch(3, 5)
-        np.array([0, 4])
-        """
-        findices = []
-        for i in range(start, end):
-            folder = self.image_names[i].split('_')[0]
-            findices.extend([self.folder_indices[folder]] * times)
-
-        return np.array(findices)
-
-    def get_folder_indices_for_cur_batch_val(self, start, end):
-        """
-        Get the indices of the folders in the current batch.
-
-        :param start: start index in `self.val_images`
-        :param end: end index in `self.val_images`. `end` won't be included.
-
-        :Example:
-        >>> self.folder_indices = {'A': 1, 'B': 0, 'C': 2,
-                'D': 4, 'E', 3}
-        >>> start == 3, end == 5
-        >>> self.val_images[3] == 'B_3.JPEG'
-        >>> self.val_images[4] == 'D_1.JPEG'
-        >>> self.get_folder_indices_for_cur_batch(3, 5)
-        np.array([0, 4])
-        """
-        findices = []
-        for i in range(start, end):
-            folder = self.image_to_folder_val[self.val_images[i]]
-            findices.append(self.folder_indices[folder])
-
-        return np.array(findices)
-
-    def one_hot(self, start, end, times):
-        """
-        Get the one hot encoding of current
-        batch of images. For each image reserve total `:py:times:`
-        space due to data augmentation.
+        Get the one hot encoding of `:py:labels:`
 
         The size of the output encoding matrix
         has to be (batch size x no of categories).
 
-        :param start: start index in `self.image_names`
-        :param end: end index in `self.image_names`. `end` won't be included.
-        :param times: Total number of one hot for each image after
-                      data augmentation.
+        :param labels: list of labels for current batch
+        :type labels: `list`
         """
-        batch_size = end - start
+        batch_size = len(labels)
 
-        y_hat = np.zeros((batch_size * times, len(self.folders)))
-        folder_indices = self.get_folder_indices_for_cur_batch(start, end, times)
-        y_hat[np.repeat(np.arange(batch_size), times), folder_indices] = 1
+        y_hat = np.zeros((batch_size, len(self.wnid2label)))
+        y_hat[np.arange(batch_size), labels] = 1
 
         return y_hat
 
-    def one_hot_val(self, start, end):
+    @preprocess
+    def get_image(self, image_path):
         """
-        Get the one hot encoding of current
-
-        The size of the output encoding matrix
-        has to be (batch size x no of categories).
-
-        :param start: start index in `self.val_images`
-        :param end: end index in `self.val_images`. `end` won't be included.
+        Get the image in the path `image_path`
         """
-        batch_size = end - start
+        return Image.open(image_path)
 
-        y_hat = np.zeros((batch_size, len(self.folders)))
-        folder_indices = self.get_folder_indices_for_cur_batch_val(start, end)
-        y_hat[np.arange(batch_size), folder_indices] = 1
-
-        return y_hat
-
-    def get_images_for_cur_batch(self, start, end, img_size):
+    def cur_batch_images(self, images, val=False):
         """
-        Convert to numpy array for all the images in current batch.
-        For each image do data augmentation.
+        Convert all images in `images` to numpy array
 
-        :param start: start index in `self.image_names`
-        :param end: end index in `self.image_names`. `end` won't be included.
+        Return numpy size (`:py:self.batch_size:`, 227, 227, 3)
         """
-        images = []
+        npimages = []
+        for image in images:
+            npimages.append(self.get_image(self.image_path(image, val)))
 
-        for i in range(start, end):
-            image_path = self.get_full_image_path(self.image_names[i])
-            image = image2PIL(image_path)
-            images.extend(augment(image, img_size))
+        return np.array(npimages)
 
-            if images[0].shape != images[-1].shape:
-                self.logger.error("Image path: %s, shape: %s",
-                                  image_path, images[-1].shape)
-
-        return np.array(images)
-
-    def get_images_for_cur_batch_val(self, start, end, img_size):
+    def cur_batch_labels(self, images, val=False):
         """
-        Convert to numpy array for all the images in current batch.
-        For each image do data augmentation.
-
-        :param start: start index in `self.image_names`
-        :param end: end index in `self.image_names`. `end` won't be included.
+        Get the one hot encoding for all `images` in one array
         """
-        images = []
+        labels = []
+        for image in images:
+            if val:
+                labels.append(self.image_names_val[image])
+            else:
+                labels.append(self.image_names[image].label)
+        return self.one_hot(labels)
 
-        for i in range(start, end):
-            image_path = self.get_full_image_path_val(self.val_images[i])
-            image = image2nparray(image_path, img_size)
-            images.append(image)
-
-            if images[0].shape != images[-1].shape:
-                self.logger.error("Image path: %s, shape: %s",
-                                  image_path, images[-1].shape)
-
-        return np.array(images)
-
-    def get_images_for_1_batch(self, batch_size, img_size):
+    @property
+    def gen_batch(self):
         """
-        A generator which returns `batch_size` of images in
-        a numpy array
-
-        :param batch_size: size of each batch
+        A generator which returns `:py:self.batch_size:` of
+        images(in a numpy array) and corresponding labels
         """
-        random.shuffle(self.image_names)
+        images = list(self.image_names.keys())
+        shuffle(images)
 
-        image_path = self.get_full_image_path(self.image_names[0])
-        # self.logger.info("image dimension: %s",
-        #                 image2nparray(image_path).shape)
+        for idx in range(ceil(len(images) / self.batch_size)):
+            _images = images[idx * self.batch_size: (idx + 1) * self.batch_size]
+            X = self.cur_batch_images(_images)
+            Y = self.cur_batch_labels(_images)
+            yield X, Y
 
-        start = 0
-        end = batch_size
-        num_images = len(self.image_names)
-
-        while start < num_images:
-            # Careful for the end index
-            if end > num_images:
-                end = num_images
-
-            images = self.get_images_for_cur_batch(start, end, img_size)
-            y_hat = self.one_hot(start, end,
-                                 len(images) // (end - start))
-
-            yield images, y_hat
-
-            # Prepare for next batch
-            start += batch_size
-            end += batch_size
-
-        self.logger.warning("Start idx: %d, Total no images: %d",
-                            start, num_images)
         raise StopIteration
 
-    def gen_validation_images(self):
+    @property
+    def get_batch_val(self):
         """
-        Generate image names for the validation dataset.
-        Only generate the names not the whole path
+        A generator which returns `:py:self.batch_size:` of
+        images(in a numpy array) and corresponding labels
+        for validation dataset
         """
+        images = list(self.image_names_val.keys())
+        shuffle(images)
 
-        val_path = os.path.join(self.path, 'val')
-        for image in os.listdir(val_path):
-            # self.image_names.append(f_{idx}.JPEG)
-            self.val_images.append(image)
+        _images = sample(images, self.batch_size)
+        X = self.cur_batch_images(_images, True)
+        Y = self.cur_batch_labels(_images, True)
 
-        self.val_images.sort()
-
-        self.logger.info("The validation dataset has %d images",
-                         len(self.val_images))
-
-    def find_synset_data_val(self):
-        """
-        Read validation ground truth file to find out
-        which image belongs to which category.
-        Store the image to folder_name mappings in
-        `:py:self.image_to_folder_val:`
-        """
-        # Ground truth file
-        g_file = os.path.join(self.path, 'devkit-1.0', 'data',
-                              'ILSVRC2010_validation_ground_truth.txt')
-
-        meta_file = os.path.join(self.path, 'devkit-1.0', 'data',
-                                 'meta.mat')
-        mat = loadmat(meta_file)
-        synsets = mat['synsets']
-        with open(g_file) as f:
-            for i, file_name in zip(f, self.val_images):
-                self.image_to_folder_val[file_name] = synsets[int(i) - 1][0][1][0]
-
-    def get_images_for_1_batch_val(self, batch_size, img_size):
-        """
-        A generator which returns `batch_size` of images in
-        a numpy array
-
-        :param batch_size: size of each batch
-        """
-        self.gen_validation_images()
-        self.find_synset_data_val()
-
-        random.shuffle(self.val_images)
-
-        start = 0
-        end = batch_size
-        num_images = len(self.val_images)
-
-        while start < num_images:
-            # Careful for the end index
-            if end > num_images:
-                end = num_images
-
-            images = self.get_images_for_cur_batch_val(start, end, img_size)
-            y_hat = self.one_hot_val(start, end)
-
-            yield images, y_hat
-
-            # Prepare for next batch
-            start += batch_size
-            end += batch_size
-
-        self.logger.warning("Total no images: %d",
-                            num_images)
-        raise StopIteration
+        return X, Y
 
 if __name__ == '__main__':
     import argparse
@@ -375,14 +246,13 @@ if __name__ == '__main__':
                         help = 'ImageNet dataset path')
     args = parser.parse_args()
 
-    data = LSVRC2010(args.image_path)
+    lsvrc2010 = LSVRC2010(args.image_path, 128)
 
-    image_cur_batch = data.get_images_for_1_batch(128, (227, 227))
+    image_cur_batch = lsvrc2010.gen_batch
     first_batch = next(image_cur_batch)
-    data.logger.info("The first batch shape: %s", first_batch[0].shape)
-    data.logger.info("The first one hot vector shape: %s", first_batch[1].shape)
+    print("The first batch shape:", first_batch[0].shape)
+    print("The first one hot vector shape:", first_batch[1].shape)
 
-    image_cur_batch = data.get_images_for_1_batch_val(2, (227, 227))
-    first_batch = next(image_cur_batch)
-    data.logger.info("The first batch shape: %s", first_batch[0].shape)
-    data.logger.info("The first one hot vector shape: %s", first_batch[1].shape)
+    first_batch = lsvrc2010.get_batch_val
+    print("The first batch shape:", first_batch[0].shape)
+    print("The first one hot vector shape:", first_batch[1].shape)
