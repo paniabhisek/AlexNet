@@ -206,6 +206,21 @@ class AlexNet:
         top5_correct = tf.nn.in_top_k(self.logits, tf.argmax(self.labels, 1), 5)
         self.top5_accuracy = tf.reduce_mean(tf.cast(top5_correct, tf.float32))
 
+        self.add_summaries()
+
+    def add_summaries(self):
+        """
+        Add summaries for loss, top1 and top5 accuracies
+
+        Add loss, top1 and top5 accuracies to summary files
+        in order to visualize in tensorboard
+        """
+        tf.summary.scalar('loss', self.loss)
+        tf.summary.scalar('Top-1-Acc', self.accuracy)
+        tf.summary.scalar('Top-5-Acc', self.top5_accuracy)
+
+        self.merged = tf.summary.merge_all()
+
     def save_model(self, sess, saver):
         """
         Save the current model
@@ -220,6 +235,25 @@ class AlexNet:
         save_path = saver.save(sess, model_save_path)
         self.logger.info("Model saved in path: %s", save_path)
 
+    def get_summary_writer(self, sess):
+        """
+        Get summary writer for training and validation
+
+        Responsible for creating summary writer so it can
+        write summaries to a file so it can be read by
+        tensorboard later.
+        """
+        if not os.path.exists(os.path.join('summary', 'train')):
+            os.makedirs(os.path.join('summary', 'train'))
+        if not os.path.exists(os.path.join('summary', 'val')):
+            os.makedirs(os.path.join('summary', 'val'))
+        return (tf.summary.FileWriter(os.path.join(os.getcwd(),
+                                                  'summary', 'train'),
+                                      sess.graph),
+                tf.summary.FileWriter(os.path.join(os.getcwd(),
+                                                   'summary', 'val'),
+                                      sess.graph))
+
     def train(self, epochs, thread='false'):
         """
         Train AlexNet.
@@ -233,6 +267,8 @@ class AlexNet:
 
         saver = tf.train.Saver()
         with tf.Session() as sess:
+            (summary_writer_train,
+             summary_writer_val) = self.get_summary_writer(sess)
             sess.run(init)
 
             best_loss = float('inf')
@@ -254,6 +290,13 @@ class AlexNet:
                     losses.append(loss)
                     accuracies.append(acc)
                     if batch_i % batch_step == 0:
+                        summary = sess.run(self.merged,
+                                           feed_dict = {
+                                               self.input_image: images,
+                                               self.labels: labels
+                                           })
+                        summary_writer_train.add_summary(summary, batch_i * (epoch + 1))
+                        summary_writer_train.flush()
                         end = time.time()
                         self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f "
                                          "Avg loss: %f Accuracy: %f Avg Accuracy: %f "
@@ -266,12 +309,16 @@ class AlexNet:
 
                     if batch_i % val_step == 0:
                         images_val, labels_val = self.lsvrc2010.get_batch_val
-                        loss, acc, top5_acc = sess.run([self.loss, self.accuracy,
-                                                        self.top5_accuracy],
-                                                       feed_dict = {
-                                                           self.input_image: images,
-                                                           self.labels: labels
-                                                       })
+                        (summary, loss,
+                         acc, top5_acc) = sess.run([self.merged, self.loss,
+                                                    self.accuracy,
+                                                    self.top5_accuracy],
+                                                   feed_dict = {
+                                                       self.input_image: images,
+                                                       self.labels: labels
+                                                   })
+                        summary_writer_val.add_summary(summary, batch_i * (epoch + 1))
+                        summary_writer_val.flush()
                         self.logger.info("===================Validation===================")
                         self.logger.info("Loss: %f Accuracy: %f Top 5 Accuracy: %f",
                                          loss, acc, top5_acc)
