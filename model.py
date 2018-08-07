@@ -203,6 +203,9 @@ class AlexNet:
         correct = tf.equal(tf.argmax(self.logits, 1), tf.argmax(self.labels, 1))
         self.accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
+        top5_correct = tf.nn.in_top_k(self.logits, tf.argmax(self.labels, 1), 5)
+        self.top5_accuracy = tf.reduce_mean(tf.cast(top5_correct, tf.float32))
+
     def save_model(self, sess, saver):
         """
         Save the current model
@@ -240,32 +243,38 @@ class AlexNet:
                 start = time.time()
                 gen_batch = self.lsvrc2010.gen_batch
                 for batch_i, (images, labels) in enumerate(gen_batch):
-                    _, loss, acc = sess.run([self.optimizer, self.loss, self.accuracy],
-                                            feed_dict = {
-                                                self.input_image: images,
-                                                self.labels: labels
-                                            })
+                    (_, loss, acc,
+                     top5_acc) = sess.run([self.optimizer, self.loss,
+                                           self.accuracy, self.top5_accuracy],
+                                          feed_dict = {
+                                              self.input_image: images,
+                                              self.labels: labels
+                                          })
 
                     losses.append(loss)
                     accuracies.append(acc)
                     if batch_i % batch_step == 0:
                         end = time.time()
                         self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f "
-                                         "Avg loss: %f Accuracy: %f Avg Accuracy: %f",
+                                         "Avg loss: %f Accuracy: %f Avg Accuracy: %f "
+                                         "Top 5 Accuracy: %f",
                                          end - start, epoch, batch_i,
                                          loss, sum(losses) / len(losses),
-                                         acc, sum(accuracies) / len(accuracies))
+                                         acc, sum(accuracies) / len(accuracies),
+                                         top5_acc)
                         start = time.time()
 
                     if batch_i % val_step == 0:
                         images_val, labels_val = self.lsvrc2010.get_batch_val
-                        loss, acc = sess.run([self.loss, self.accuracy],
-                                             feed_dict = {
-                                                 self.input_image: images,
-                                                 self.labels: labels
-                                             })
+                        loss, acc, top5_acc = sess.run([self.loss, self.accuracy,
+                                                        self.top5_accuracy],
+                                                       feed_dict = {
+                                                           self.input_image: images,
+                                                           self.labels: labels
+                                                       })
                         self.logger.info("===================Validation===================")
-                        self.logger.info("Loss: %f Accuracy: %f", loss, acc)
+                        self.logger.info("Loss: %f Accuracy: %f Top 5 Accuracy: %f",
+                                         loss, acc, top5_acc)
 
                         cur_loss = sum(losses) / len(losses)
                         if cur_loss < best_loss:
