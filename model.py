@@ -91,6 +91,19 @@ class AlexNet:
 
         return strides
 
+    def get_bias(self, layer_num, value=0.0):
+        """
+        Get the bias variable for current layer
+
+        :param layer_num: Indicates the layer number in the graph
+        :type layer_num: int
+        """
+        layer = 'L' + str(layer_num)
+        initial = tf.constant(value,
+                              shape=[self.hyper_param[layer]['filters']],
+                              name='C' + str(layer_num))
+        return tf.Variable(initial, name='B' + str(layer_num))
+
     def build_graph(self):
         """
         Build the tensorflow graph for AlexNet.
@@ -118,6 +131,8 @@ class AlexNet:
                                self.get_strides(1),
                                padding = self.hyper_param['L1']['padding'],
                                name='L1_conv')
+        l1_conv = tf.add(l1_conv, self.get_bias(1))
+        l1_conv = tf.nn.relu(l1_conv)
 
         # Layer 1 Max Pooling layer
         l1_MP = tf.layers.max_pooling2d(l1_conv,
@@ -131,6 +146,8 @@ class AlexNet:
                                self.get_strides(2),
                                padding = self.hyper_param['L2']['padding'],
                                name='L2_conv')
+        l2_conv = tf.add(l2_conv, self.get_bias(2, 1.0))
+        l2_conv = tf.nn.relu(l2_conv)
 
         # Layer 2 Max Pooling layer
         l2_MP = tf.layers.max_pooling2d(l2_conv,
@@ -144,6 +161,8 @@ class AlexNet:
                                self.get_strides(3),
                                padding = self.hyper_param['L3']['padding'],
                                name='L3_conv')
+        l3_conv = tf.add(l3_conv, self.get_bias(3))
+        l3_conv = tf.nn.relu(l3_conv)
 
         # Layer 4 Convolutional layer
         filter4 = self.get_filter(4, 'L4_filter')
@@ -151,6 +170,8 @@ class AlexNet:
                                self.get_strides(4),
                                padding = self.hyper_param['L4']['padding'],
                                name='L4_conv')
+        l4_conv = tf.add(l4_conv, self.get_bias(4, 1.0))
+        l4_conv = tf.nn.relu(l4_conv)
 
         # Layer 5 Convolutional layer
         filter5 = self.get_filter(5, 'L5_filter')
@@ -158,6 +179,8 @@ class AlexNet:
                                self.get_strides(5),
                                padding = self.hyper_param['L5']['padding'],
                                name='L5_conv')
+        l5_conv = tf.add(l5_conv, self.get_bias(5, 1.0))
+        l5_conv = tf.nn.relu(l5_conv)
 
         # Layer 5 Max Pooling layer
         l5_MP = tf.layers.max_pooling2d(l5_conv,
@@ -169,7 +192,8 @@ class AlexNet:
 
         # Layer 6 Fully connected layer
         l6_FC = tf.contrib.layers.fully_connected(flatten,
-                                                  self.hyper_param['FC6'])
+                                                  self.hyper_param['FC6'],
+                                                  biases_initializer=tf.ones_initializer())
 
         # Dropout layer
         l6_keep_prob = tf.Variable(0.5, tf.float32)
@@ -178,7 +202,8 @@ class AlexNet:
 
         # Layer 7 Fully connected layer
         l7_FC = tf.contrib.layers.fully_connected(l6_dropout,
-                                                  self.hyper_param['FC7'])
+                                                  self.hyper_param['FC7'],
+                                                  biases_initializer=tf.ones_initializer())
 
         # Dropout layer
         l7_keep_prob = tf.Variable(0.5, tf.float32)
