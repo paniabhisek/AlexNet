@@ -19,6 +19,7 @@ from PIL import Image
 # local modules
 from utils import preprocess
 from utils import gen_mean_activity
+from utils import Store
 from data_augment import augment
 
 class LSVRC2010:
@@ -208,6 +209,35 @@ class LSVRC2010:
 
     @property
     def gen_batch(self):
+        """
+        A generator which returns `:py:self.batch_size:` of
+        images(in a numpy array) and corresponding labels
+        """
+        images = list(self.image_names.keys())
+        shuffle(images)
+        def get_batch(idx):
+            """
+            Get current batch of data give batch index.
+
+            :param idx: The batch index in the dataset
+            """
+            _images = images[idx * self.batch_size: (idx + 1) * self.batch_size]
+            X = self.cur_batch_images(_images)
+            Y = self.cur_batch_labels(_images)
+            return X, Y
+
+        source = (get_batch, len(self.image_names.keys()),
+                  self.batch_size)
+        store = Store(source, 10)
+
+        batch = store.read()
+        for i in range(ceil(len(self.image_names.keys()) / self.batch_size)):
+            yield next(batch)
+
+        raise StopIteration
+
+    @property
+    def gen_batch_non_threaded(self):
         """
         A generator which returns `:py:self.batch_size:` of
         images(in a numpy array) and corresponding labels

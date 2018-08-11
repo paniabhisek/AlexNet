@@ -4,8 +4,12 @@
 # library modules
 import os
 import pickle
+import logging
 
 from random import randint
+from queue import Queue
+from math import ceil
+from threading import Thread
 
 # external library modules
 from PIL import Image
@@ -152,6 +156,59 @@ def preprocess(function):
         return npimg - mean.reshape((1, 1, 3))
 
     return wrapper
+
+class Store:
+    """
+    A store to keep batches of data for deep learning
+    using threading.
+    """
+    def __init__(self, source, max_qsize):
+        """
+        :param source: It will tell how to get the data.
+          This is a tuple of function, total size of data for one epoch,
+          and batch size. The function will be used to get the data
+          to store
+        :type source: tuple ==> (function, int, int)
+        :param max_qsize: Maximum number of batches it can store
+        """
+        self.function, self.data_size, self.batch_size = source
+        self.max_qsize = max_qsize
+        self.queue = Queue(max_qsize)
+        self.logger = logging.getLogger('AlexNet.utils.Store')
+
+    def _write(self, i):
+        """
+        Helper function to pass to the thread class to read data parallelly
+        """
+        X, Y = self.function(i)
+        self.queue.put((X, Y))
+        self.logger.info("The batch no %d is stored", i)
+
+    def write(self):
+        """
+        Store datas by using the function given using threading.
+
+        It should read datas from disk parallelly.
+        """
+        for i in range(ceil(self.data_size / self.batch_size)):
+            while self.queue.qsize() >= self.max_qsize:
+                time.sleep(.5)
+            t = Thread(target=self._write, args=(i,))
+            # don't need to read batches if the main program exits
+            t.daemon = True
+            t.start()
+
+    def read(self):
+        """
+        Generator to read data from the store.
+
+        Creates a generator to read data from store(not disk).
+        It first starts reading the data from disk using threading
+        so that the data in the store is always available while reading.
+        """
+        self.write()
+        for _ in range(ceil(self.data_size / self.batch_size)):
+            yield self.queue.get()
 
 if __name__ == '__main__':
     import argparse
