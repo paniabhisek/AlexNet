@@ -361,16 +361,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('image_path', metavar = 'image-path',
                         help = 'ImageNet dataset path')
-    parser.add_argument('train',
-                        help = 'Train AlexNet')
-    parser.add_argument('val',
-                        help = 'Run Validation on AlexNet')
-    parser.add_argument('--threading', default='false',
-                        help = 'Consume images in separate thread')
     args = parser.parse_args()
 
     alexnet = AlexNet(args.image_path, 512)
-    if args.train == 'true':
-        alexnet.train(16, thread=args.threading)
-    if args.val == 'true':
-        alexnet.validation(128)
+    alexnet.train(50)
+

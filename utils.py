@@ -7,6 +7,7 @@ import pickle
 import logging
 
 from random import randint
+from random import choice
 from queue import Queue
 from math import ceil
 from threading import Thread
@@ -214,9 +215,17 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('image_path', metavar = 'image-path',
-                        help = 'ImageNet dataset path')
+                        help = 'ImageNet train dataset path')
     args = parser.parse_args()
-    im = image2nparray(args.image_path)
-    print("Without reshaping, size:", im.shape)
-    im = image2nparray(args.image_path, (127, 127))
-    print("After reshaping, size:", im.shape)
+
+    train_path = os.path.join(args.image_path)
+    random_train_folder = choice(os.listdir(train_path))
+    folder_path = os.path.join(train_path, random_train_folder)
+    random_image = choice(os.listdir(folder_path))
+    image_path = os.path.join(folder_path, random_image)
+
+    print("Image path", image_path)
+    print("Image shape", img2np(image_path).shape)
+    if not os.path.exists('mean.pkl'):
+        gen_mean_activity(args.image_path)
+    print("Mean activity", get_mean_activity())
