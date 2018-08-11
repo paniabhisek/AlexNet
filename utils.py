@@ -11,6 +11,8 @@ from random import choice
 from queue import Queue
 from math import ceil
 from threading import Thread
+from threading import Lock
+from logs import get_logger
 
 # external library modules
 from PIL import Image
@@ -71,20 +73,44 @@ def gen_mean_activity(base_dir):
 
     :param base_dir: Base directory for training
     """
+    logger = get_logger('Mean Activity', 'mean.log')
     RGB = np.zeros((3,))
-    count = 0
-    for folder in os.listdir(os.path.join(base_dir)):
-        for image in os.listdir(os.path.join(base_dir, folder)):
+    lock = Lock()
+    def mean_activity_folder(base_dir):
+        _RGB = np.zeros((3,))
+        logger.info("Starting directory: %s", base_dir)
+        for image in os.listdir(base_dir):
             img = Image.open(os.path.join(base_dir,
-                                          folder,
                                           image))
             img = resize(img)
 
             npimg = np.array(img)
-            RGB += npimg.mean(axis=(0,1))
+            _RGB += npimg.mean(axis=(0,1))
 
-            count += 1
+        with lock:
+            nonlocal RGB
+            RGB += _RGB
 
+        logger.info("Ending directory: %s", base_dir)
+
+    count = 0
+    threads = []
+    for i, folder in enumerate(os.listdir(os.path.join(base_dir))):
+        folder_path = os.path.join(base_dir, folder)
+        count += len(os.listdir(folder_path))
+        thread = Thread(target=mean_activity_folder,
+                        args=(folder_path,))
+        thread.start()
+        threads.append(thread)
+        if i % 100 == 0:
+            for t in threads:
+                t.join()
+            threads = []
+
+    for t in threads:
+        t.join()
+
+    logger.info("RGB: %s, count: %d", str(RGB), count)
     RGB /= count
 
     with open('mean.pkl', 'wb') as handle:

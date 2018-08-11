@@ -4,11 +4,11 @@
 import logging
 import sys
 
-def get_logger():
-    logger = logging.getLogger('AlexNet')
+def get_logger(logger_name='AlexNet', file_name='logs.log'):
+    logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
 
-    fh = logging.FileHandler('logs.log')
+    fh = logging.FileHandler(file_name)
     fh.setLevel(logging.DEBUG)
 
     ch = logging.StreamHandler(sys.stdout)
