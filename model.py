@@ -334,8 +334,8 @@ class AlexNet:
 
                     if batch_i % val_step == 0:
                         images_val, labels_val = self.lsvrc2010.get_batch_val
-                        (summary, loss,
-                         acc, top5_acc) = sess.run([self.merged, self.loss,
+                        (summary,
+                         acc, top5_acc) = sess.run([self.merged,
                                                     self.accuracy,
                                                     self.top5_accuracy],
                                                    feed_dict = {
