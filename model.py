@@ -291,7 +291,7 @@ class AlexNet:
         init = tf.global_variables_initializer()
 
         saver = tf.train.Saver()
-        with tf.Session() as sess:
+        with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             (summary_writer_train,
              summary_writer_val) = self.get_summary_writer(sess)
             sess.run(init)
