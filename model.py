@@ -363,6 +363,6 @@ if __name__ == '__main__':
                         help = 'ImageNet dataset path')
     args = parser.parse_args()
 
-    alexnet = AlexNet(args.image_path, 512)
+    alexnet = AlexNet(args.image_path, 128)
     alexnet.train(50)
 

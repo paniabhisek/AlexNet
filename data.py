@@ -221,6 +221,7 @@ class LSVRC2010:
 
             :param idx: The batch index in the dataset
             """
+            self.logger.info("Reading batch for index: %d", idx)
             _images = images[idx * self.batch_size: (idx + 1) * self.batch_size]
             X = self.cur_batch_images(_images)
             Y = self.cur_batch_labels(_images)
