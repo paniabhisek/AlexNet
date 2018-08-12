@@ -241,7 +241,9 @@ class Store:
         It first starts reading the data from disk using threading
         so that the data in the store is always available while reading.
         """
-        self.write()
+        thread = Thread(target=self.write)
+        thread.daemon = True
+        thread.start()
         for _ in range(ceil(self.data_size / self.batch_size)):
             yield self.queue.get()
 
