@@ -210,7 +210,7 @@ class Store:
         """
         X, Y = self.function(i)
         self.queue.put((X, Y))
-        self.logger.info("The batch no %d is stored", i)
+        self.logger.debug("The batch no %d is stored", i)
 
     def write(self):
         """
