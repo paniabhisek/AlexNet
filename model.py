@@ -40,6 +40,9 @@ class AlexNet:
         self.logger.info("Creating placeholders for graph...")
         self.create_tf_placeholders()
 
+        self.logger.info("Creating variables for graph...")
+        self.create_tf_variables()
+
         self.logger.info("Initialize hyper parameters...")
         self.hyper_param = {}
         self.init_hyper_param()
@@ -53,6 +56,18 @@ class AlexNet:
                                           name='input_image')
         self.labels = tf.placeholder(tf.int32, shape=self.output_shape,
                                      name='output')
+
+    def create_tf_variables(self):
+        """
+        Create variables for epoch, batch and global step
+        """
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.cur_epoch = tf.Variable(0, name='epoch', trainable=False)
+        self.cur_batch = tf.Variable(0, name='batch', trainable=False)
+
+        self.increment_epoch_op = tf.assign(self.cur_epoch, self.cur_epoch+1)
+        self.increment_batch_op = tf.assign(self.cur_batch, self.cur_batch+1)
+        self.init_batch_op = tf.assign(self.cur_batch, 0)
 
     def init_hyper_param(self):
         """
@@ -223,7 +238,8 @@ class AlexNet:
         # total loss
         self.loss = tf.reduce_mean(loss_function)
 
-        self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+        self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss,
+                                                                             global_step=self.global_step)
 
         correct = tf.equal(tf.argmax(self.logits, 1), tf.argmax(self.labels, 1))
         self.accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
@@ -297,20 +313,29 @@ class AlexNet:
             sess.run(init)
 
             best_loss = float('inf')
-            for epoch in range(epochs):
+            while sess.run(self.cur_epoch) < epochs:
                 losses = []
                 accuracies = []
 
+                epoch = sess.run(self.cur_epoch)
+                sess.run(self.init_batch_op)
                 start = time.time()
                 gen_batch = self.lsvrc2010.gen_batch
-                for batch_i, (images, labels) in enumerate(gen_batch):
-                    (_, loss, acc,
-                     top5_acc) = sess.run([self.optimizer, self.loss,
-                                           self.accuracy, self.top5_accuracy],
-                                          feed_dict = {
-                                              self.input_image: images,
-                                              self.labels: labels
-                                          })
+                for images, labels in gen_batch:
+                    batch_i = sess.run(self.cur_batch)
+                    # If it's resumed from stored model,
+                    # this will save from messing up the batch number
+                    # in subsequent epoch
+                    if batch_i >= ceil(len(self.lsvrc2010.image_names) / self.batch_size):
+                        break
+                    (_, loss, acc, top5_acc, global_step,
+                     _) = sess.run([self.optimizer, self.loss,
+                                    self.accuracy, self.top5_accuracy,
+                                    self.global_step, self.increment_batch_op],
+                                   feed_dict = {
+                                       self.input_image: images,
+                                       self.labels: labels
+                                   })
 
                     losses.append(loss)
                     accuracies.append(acc)
@@ -320,7 +345,7 @@ class AlexNet:
                                                self.input_image: images,
                                                self.labels: labels
                                            })
-                        summary_writer_train.add_summary(summary, batch_i * (epoch + 1))
+                        summary_writer_train.add_summary(summary, global_step)
                         summary_writer_train.flush()
                         end = time.time()
                         self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f "
@@ -342,7 +367,7 @@ class AlexNet:
                                                        self.input_image: images,
                                                        self.labels: labels
                                                    })
-                        summary_writer_val.add_summary(summary, batch_i * (epoch + 1))
+                        summary_writer_val.add_summary(summary, global_step)
                         summary_writer_val.flush()
                         self.logger.info("===================Validation===================")
                         self.logger.info("Loss: %f Accuracy: %f Top 5 Accuracy: %f",
@@ -352,6 +377,9 @@ class AlexNet:
                         if cur_loss < best_loss:
                             best_loss = cur_loss
                             self.save_model(sess, saver)
+
+                # Increase epoch number
+                sess.run(self.increment_epoch_op)
 
     def test(self):
         raise NotImplementedError
