@@ -22,12 +22,13 @@ class AlexNet:
     `AlexNet <https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf>`_
     """
 
-    def __init__(self, path, batch_size):
+    def __init__(self, path, batch_size, resume):
         """
         Build the AlexNet model
         """
         self.logger = logs.get_logger()
 
+        self.resume = resume
         self.path = path
         self.batch_size = batch_size
         self.lsvrc2010 = LSVRC2010(self.path, batch_size)
@@ -276,6 +277,19 @@ class AlexNet:
         save_path = saver.save(sess, model_save_path)
         self.logger.info("Model saved in path: %s", save_path)
 
+    def restore_model(self, sess, saver):
+        """
+        Restore previously saved model
+
+        :param sess: Session object
+        :param saver: Saver object responsible to store
+        """
+        model_base_path = os.path.join(os.getcwd(), 'model')
+        model_restore_path = os.path.join(os.getcwd(), 'model', 'model.ckpt')
+        saver.restore(sess, model_restore_path)
+        self.logger.info("Model Restored from path: %s",
+                         model_restore_path)
+
     def get_summary_writer(self, sess):
         """
         Get summary writer for training and validation
@@ -310,15 +324,23 @@ class AlexNet:
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             (summary_writer_train,
              summary_writer_val) = self.get_summary_writer(sess)
-            sess.run(init)
+            if self.resume and os.path.exists(os.path.join(os.getcwd(),
+                                                           'model')):
+                self.restore_model(sess, saver)
+            else:
+                sess.run(init)
 
+            resume_batch = True
             best_loss = float('inf')
             while sess.run(self.cur_epoch) < epochs:
                 losses = []
                 accuracies = []
 
                 epoch = sess.run(self.cur_epoch)
-                sess.run(self.init_batch_op)
+                if not self.resume or (
+                        self.resume and not resume_batch):
+                    sess.run(self.init_batch_op)
+                resume_batch = False
                 start = time.time()
                 gen_batch = self.lsvrc2010.gen_batch
                 for images, labels in gen_batch:
@@ -389,8 +411,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('image_path', metavar = 'image-path',
                         help = 'ImageNet dataset path')
+    parser.add_argument('--resume', metavar='resume',
+                        type=lambda x: x != 'False', default=True,
+                        required=False,
+                        help='Resume training (True or False)')
     args = parser.parse_args()
 
-    alexnet = AlexNet(args.image_path, 128)
+    alexnet = AlexNet(args.image_path, 128, resume=args.resume)
     alexnet.train(50)
 
