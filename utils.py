@@ -5,6 +5,7 @@
 import os
 import pickle
 import logging
+import time
 
 from random import randint
 from random import choice
@@ -217,13 +218,20 @@ class Store:
 
         It should read datas from disk parallelly.
         """
-        for i in range(ceil(self.data_size / self.batch_size)):
-            while self.queue.qsize() >= self.max_qsize:
+        threads = []
+        for idx in range(ceil(self.data_size / self.batch_size)):
+            while len(threads) >= self.max_qsize:
+                for i, t in enumerate(threads):
+                    if not t.is_alive():
+                        del threads[i]
+                        break
+                if len(threads) < self.max_qsize: break
                 time.sleep(.5)
-            t = Thread(target=self._write, args=(i,))
+            thread = Thread(target=self._write, args=(idx,))
             # don't need to read batches if the main program exits
-            t.daemon = True
-            t.start()
+            thread.daemon = True
+            thread.start()
+            threads.append(thread)
 
     def read(self):
         """
