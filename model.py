@@ -386,14 +386,13 @@ class AlexNet:
                                                     self.accuracy,
                                                     self.top5_accuracy],
                                                    feed_dict = {
-                                                       self.input_image: images,
-                                                       self.labels: labels
+                                                       self.input_image: images_val,
+                                                       self.labels: labels_val
                                                    })
                         summary_writer_val.add_summary(summary, global_step)
                         summary_writer_val.flush()
-                        self.logger.info("===================Validation===================")
-                        self.logger.info("Loss: %f Accuracy: %f Top 5 Accuracy: %f",
-                                         loss, acc, top5_acc)
+                        self.logger.info("Validation - Accuracy: %f Top 5 Accuracy: %f",
+                                         acc, top5_acc)
 
                         cur_loss = sum(losses) / len(losses)
                         if cur_loss < best_loss:
