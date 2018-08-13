@@ -351,13 +351,18 @@ class AlexNet:
                     if batch_i >= ceil(len(self.lsvrc2010.image_names) / self.batch_size):
                         break
                     (_, loss, acc, top5_acc, global_step,
-                     _) = sess.run([self.optimizer, self.loss,
-                                    self.accuracy, self.top5_accuracy,
-                                    self.global_step, self.increment_batch_op],
-                                   feed_dict = {
-                                       self.input_image: images,
-                                       self.labels: labels
-                                   })
+                     _, logits) = sess.run([self.optimizer, self.loss,
+                                            self.accuracy, self.top5_accuracy,
+                                            self.global_step, self.increment_batch_op,
+                                            self.logits],
+                                           feed_dict = {
+                                               self.input_image: images,
+                                               self.labels: labels
+                                           })
+                    self.logger.info("logits shape: %s top5 logits: %s"
+                                     "top label: %d",
+                                     str(logits.shape), str((-(logits[0])).argsort()[:5]),
+                                     np.argmax(labels[0]))
 
                     losses.append(loss)
                     accuracies.append(acc)
