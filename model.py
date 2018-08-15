@@ -238,7 +238,7 @@ class AlexNet:
                                                   biases_initializer=tf.ones_initializer())
 
         # Dropout layer
-        l6_keep_prob = tf.Variable(0.5, tf.float32)
+        l6_keep_prob = tf.constant(0.5, tf.float32)
         l6_dropout = tf.nn.dropout(l6_FC, l6_keep_prob,
                                    name='l6_dropout')
 
@@ -248,7 +248,7 @@ class AlexNet:
                                                   biases_initializer=tf.ones_initializer())
 
         # Dropout layer
-        l7_keep_prob = tf.Variable(0.5, tf.float32)
+        l7_keep_prob = tf.constant(0.5, tf.float32)
         l7_dropout = tf.nn.dropout(l7_FC, l7_keep_prob,
                                    name='l7_dropout')
 
