@@ -34,7 +34,8 @@ class AlexNet:
         self.lsvrc2010 = LSVRC2010(self.path, batch_size)
         self.num_classes = len(self.lsvrc2010.wnid2label)
 
-        self.learning_rate = 0.01
+        self.learning_rate = 0.001
+        self.lambd = tf.constant(0.0005, name='lambda')
         self.input_shape = (None, 227, 227, 3)
         self.output_shape = (None, self.num_classes)
 
@@ -93,7 +94,7 @@ class AlexNet:
 
         return tf.Variable(tf.truncated_normal(
             [filter_height, filter_width, in_channels, out_channels],
-            dtype = tf.float32, stddev = 1e-1), name = layer_name)
+            dtype = tf.float32, stddev = 1e-2), name = layer_name)
 
     def get_strides(self, layer_num):
         """
@@ -119,6 +120,20 @@ class AlexNet:
                               shape=[self.hyper_param[layer]['filters']],
                               name='C' + str(layer_num))
         return tf.Variable(initial, name='B' + str(layer_num))
+
+    @property
+    def l2_loss(self):
+        """
+        Compute the l2 loss for all the weights
+        """
+        conv_bias_names = ['B' + str(i) for i in range(1, 6)]
+        weights = []
+        for v in tf.trainable_variables():
+            if 'biases' in v.name: continue
+            if v.name.split(':')[0] in conv_bias_names: continue
+            weights.append(v)
+
+        return self.lambd * sum(tf.nn.l2_loss(weight) for weight in weights)
 
     def build_graph(self):
         """
@@ -237,7 +252,7 @@ class AlexNet:
         )
 
         # total loss
-        self.loss = tf.reduce_mean(loss_function)
+        self.loss = tf.reduce_mean(loss_function) + self.l2_loss
 
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss,
                                                                              global_step=self.global_step)
