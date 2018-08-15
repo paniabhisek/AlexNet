@@ -164,6 +164,11 @@ class AlexNet:
                                padding = self.hyper_param['L1']['padding'],
                                name='L1_conv')
         l1_conv = tf.add(l1_conv, self.get_bias(1))
+        l1_conv = tf.nn.local_response_normalization(l1_conv,
+                                                     depth_radius=5,
+                                                     bias=2,
+                                                     alpha=1e-4,
+                                                     beta=.75)
         l1_conv = tf.nn.relu(l1_conv)
 
         # Layer 1 Max Pooling layer
@@ -179,6 +184,11 @@ class AlexNet:
                                padding = self.hyper_param['L2']['padding'],
                                name='L2_conv')
         l2_conv = tf.add(l2_conv, self.get_bias(2, 1.0))
+        l2_conv = tf.nn.local_response_normalization(l2_conv,
+                                                     depth_radius=5,
+                                                     bias=2,
+                                                     alpha=1e-4,
+                                                     beta=.75)
         l2_conv = tf.nn.relu(l2_conv)
 
         # Layer 2 Max Pooling layer
