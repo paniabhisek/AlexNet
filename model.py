@@ -36,6 +36,7 @@ class AlexNet:
 
         self.learning_rate = 0.001
         self.momentum = 0.9
+        self.lambd = tf.constant(0.0005, name='lambda')
         self.input_shape = (None, 227, 227, 3)
         self.output_shape = (None, self.num_classes)
 
@@ -120,6 +121,20 @@ class AlexNet:
                               shape=[self.hyper_param[layer]['filters']],
                               name='C' + str(layer_num))
         return tf.Variable(initial, name='B' + str(layer_num))
+
+    @property
+    def l2_loss(self):
+        """
+        Compute the l2 loss for all the weights
+        """
+        conv_bias_names = ['B' + str(i) for i in range(1, 6)]
+        weights = []
+        for v in tf.trainable_variables():
+            if 'biases' in v.name: continue
+            if v.name.split(':')[0] in conv_bias_names: continue
+            weights.append(v)
+
+        return self.lambd * sum(tf.nn.l2_loss(weight) for weight in weights)
 
     def build_graph(self):
         """
@@ -238,7 +253,7 @@ class AlexNet:
         )
 
         # total loss
-        self.loss = tf.reduce_mean(loss_function)
+        self.loss = tf.reduce_mean(loss_function) + self.l2_loss
 
         self.optimizer = tf.train.MomentumOptimizer(self.learning_rate, momentum=self.momentum)\
                                  .minimize(self.loss, global_step=self.global_step)
