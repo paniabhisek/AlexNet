@@ -271,8 +271,8 @@ class AlexNet:
         correct = tf.equal(tf.argmax(self.logits, 1), tf.argmax(self.labels, 1))
         self.accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-        top5_correct = tf.nn.in_top_k(self.logits, tf.argmax(self.labels, 1), 5)
-        self.top5_accuracy = tf.reduce_mean(tf.cast(top5_correct, tf.float32))
+        self.top5_correct = tf.nn.in_top_k(self.logits, tf.argmax(self.labels, 1), 5)
+        self.top5_accuracy = tf.reduce_mean(tf.cast(self.top5_correct, tf.float32))
 
         self.add_summaries()
 
@@ -388,7 +388,9 @@ class AlexNet:
                     losses.append(loss)
                     accuracies.append(acc)
                     if batch_i % batch_step == 0:
-                        summary = sess.run(self.merged,
+                        (summary, logits,
+                         _top5) = sess.run([self.merged,
+                                            self.logits, self.top5_correct],
                                            feed_dict = {
                                                self.input_image: images,
                                                self.labels: labels
@@ -396,6 +398,12 @@ class AlexNet:
                         summary_writer_train.add_summary(summary, global_step)
                         summary_writer_train.flush()
                         end = time.time()
+                        try:
+                            true_idx = np.where(_top5[0]==True)[0][0]
+                            self.logger.debug("logit at %d: %s", true_idx,
+                                              str(logits[true_idx]))
+                        except IndexError as ie:
+                            self.logger.debug(ie)
                         self.logger.info("Time: %f Epoch: %d Batch: %d Loss: %f "
                                          "Avg loss: %f Accuracy: %f Avg Accuracy: %f "
                                          "Top 5 Accuracy: %f",
