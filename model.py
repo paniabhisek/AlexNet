@@ -57,7 +57,7 @@ class AlexNet:
         """
         self.input_image = tf.placeholder(tf.float32, shape=self.input_shape,
                                           name='input_image')
-        self.labels = tf.placeholder(tf.int32, shape=self.output_shape,
+        self.labels = tf.placeholder(tf.float32, shape=self.output_shape,
                                      name='output')
 
     def create_tf_variables(self):
@@ -134,7 +134,7 @@ class AlexNet:
             if v.name.split(':')[0] in conv_bias_names: continue
             weights.append(v)
 
-        return self.lambd * sum(tf.nn.l2_loss(weight) for weight in weights)
+        return tf.reduce_sum(self.lambd * tf.stack([tf.nn.l2_loss(weight) for weight in weights]))
 
     def build_graph(self):
         """
@@ -164,12 +164,12 @@ class AlexNet:
                                padding = self.hyper_param['L1']['padding'],
                                name='L1_conv')
         l1_conv = tf.add(l1_conv, self.get_bias(1))
-        l1_conv = tf.nn.local_response_normalization(l1_conv,
-                                                     depth_radius=10,
-                                                     bias=2,
-                                                     alpha=1e-4,
-                                                     beta=.75)
         l1_conv = tf.nn.relu(l1_conv)
+        l1_conv = tf.nn.local_response_normalization(l1_conv,
+                                                     depth_radius=2,
+                                                     bias=1.0,
+                                                     alpha=2e-5,
+                                                     beta=.75)
 
         # Layer 1 Max Pooling layer
         l1_MP = tf.layers.max_pooling2d(l1_conv,
@@ -184,12 +184,12 @@ class AlexNet:
                                padding = self.hyper_param['L2']['padding'],
                                name='L2_conv')
         l2_conv = tf.add(l2_conv, self.get_bias(2, 1.0))
-        l2_conv = tf.nn.local_response_normalization(l2_conv,
-                                                     depth_radius=10,
-                                                     bias=2,
-                                                     alpha=1e-4,
-                                                     beta=.75)
         l2_conv = tf.nn.relu(l2_conv)
+        l2_conv = tf.nn.local_response_normalization(l2_conv,
+                                                     depth_radius=2,
+                                                     bias=1.0,
+                                                     alpha=2e-5,
+                                                     beta=.75)
 
         # Layer 2 Max Pooling layer
         l2_MP = tf.layers.max_pooling2d(l2_conv,
@@ -234,8 +234,8 @@ class AlexNet:
 
         # Layer 6 Fully connected layer
         l6_FC = tf.contrib.layers.fully_connected(flatten,
-                                                  self.hyper_param['FC6'],
-                                                  biases_initializer=tf.ones_initializer())
+                                                  self.hyper_param['FC6'],)
+                                                  #biases_initializer=tf.ones_initializer())
 
         # Dropout layer
         l6_keep_prob = tf.constant(0.5, tf.float32)
@@ -243,18 +243,18 @@ class AlexNet:
                                    name='l6_dropout')
 
         # Layer 7 Fully connected layer
-        l7_FC = tf.contrib.layers.fully_connected(l6_dropout,
-                                                  self.hyper_param['FC7'],
-                                                  biases_initializer=tf.ones_initializer())
+        self.l7_FC = tf.contrib.layers.fully_connected(l6_dropout,
+                                                       self.hyper_param['FC7'],)
+        #biases_initializer=tf.ones_initializer())
 
         # Dropout layer
         l7_keep_prob = tf.constant(0.5, tf.float32)
-        l7_dropout = tf.nn.dropout(l7_FC, l7_keep_prob,
+        l7_dropout = tf.nn.dropout(self.l7_FC, l7_keep_prob,
                                    name='l7_dropout')
 
         # final layer before softmax
         self.logits = tf.contrib.layers.fully_connected(l7_dropout,
-                                                        self.num_classes)
+                                                        self.num_classes, None)
 
         # loss function
         loss_function = tf.nn.softmax_cross_entropy_with_logits(
@@ -389,16 +389,17 @@ class AlexNet:
                     accuracies.append(acc)
                     if batch_i % batch_step == 0:
                         (summary, logits,
-                         _top5) = sess.run([self.merged,
-                                            self.logits, self.top5_correct],
-                                           feed_dict = {
-                                               self.input_image: images,
-                                               self.labels: labels
-                                           })
+                         _top5, l7_FC) = sess.run([self.merged,
+                                                   self.logits, self.top5_correct, self.l7_FC],
+                                                  feed_dict = {
+                                                      self.input_image: images,
+                                                      self.labels: labels
+                                                  })
                         summary_writer_train.add_summary(summary, global_step)
                         summary_writer_train.flush()
                         end = time.time()
                         try:
+                            self.logger.debug("l7 no of non zeros: %d", np.count_nonzero(l7_FC))
                             true_idx = np.where(_top5[0]==True)[0][0]
                             self.logger.debug("logit at %d: %s", true_idx,
                                               str(logits[true_idx]))
