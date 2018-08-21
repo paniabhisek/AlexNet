@@ -57,7 +57,7 @@ class AlexNet:
         """
         self.input_image = tf.placeholder(tf.float32, shape=self.input_shape,
                                           name='input_image')
-        self.labels = tf.placeholder(tf.int32, shape=self.output_shape,
+        self.labels = tf.placeholder(tf.float32, shape=self.output_shape,
                                      name='output')
 
     def create_tf_variables(self):
@@ -134,7 +134,7 @@ class AlexNet:
             if v.name.split(':')[0] in conv_bias_names: continue
             weights.append(v)
 
-        return self.lambd * sum(tf.nn.l2_loss(weight) for weight in weights)
+        return self.lambd * tf.add_n([tf.nn.l2_loss(weight) for weight in weights])
 
     def build_graph(self):
         """
