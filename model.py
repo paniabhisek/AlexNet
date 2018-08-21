@@ -254,7 +254,7 @@ class AlexNet:
 
         # final layer before softmax
         self.logits = tf.contrib.layers.fully_connected(l7_dropout,
-                                                        self.num_classes)
+                                                        self.num_classes, None)
 
         # loss function
         loss_function = tf.nn.softmax_cross_entropy_with_logits(
