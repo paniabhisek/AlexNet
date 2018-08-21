@@ -234,8 +234,7 @@ class AlexNet:
 
         # Layer 6 Fully connected layer
         l6_FC = tf.contrib.layers.fully_connected(flatten,
-                                                  self.hyper_param['FC6'],
-                                                  biases_initializer=tf.ones_initializer())
+                                                  self.hyper_param['FC6'])
 
         # Dropout layer
         l6_keep_prob = tf.constant(0.5, tf.float32)
@@ -243,13 +242,12 @@ class AlexNet:
                                    name='l6_dropout')
 
         # Layer 7 Fully connected layer
-        l7_FC = tf.contrib.layers.fully_connected(l6_dropout,
-                                                  self.hyper_param['FC7'],
-                                                  biases_initializer=tf.ones_initializer())
+        self.l7_FC = tf.contrib.layers.fully_connected(l6_dropout,
+                                                       self.hyper_param['FC7'])
 
         # Dropout layer
         l7_keep_prob = tf.constant(0.5, tf.float32)
-        l7_dropout = tf.nn.dropout(l7_FC, l7_keep_prob,
+        l7_dropout = tf.nn.dropout(self.l7_FC, l7_keep_prob,
                                    name='l7_dropout')
 
         # final layer before softmax
@@ -389,16 +387,18 @@ class AlexNet:
                     accuracies.append(acc)
                     if batch_i % batch_step == 0:
                         (summary, logits,
-                         _top5) = sess.run([self.merged,
-                                            self.logits, self.top5_correct],
-                                           feed_dict = {
-                                               self.input_image: images,
-                                               self.labels: labels
-                                           })
+                         _top5, l7_FC) = sess.run([self.merged,
+                                                   self.logits, self.top5_correct,
+                                                   self.l7_FC],
+                                                  feed_dict = {
+                                                      self.input_image: images,
+                                                      self.labels: labels
+                                                  })
                         summary_writer_train.add_summary(summary, global_step)
                         summary_writer_train.flush()
                         end = time.time()
                         try:
+                            self.logger.debug("l7 no of non zeros: %d", np.count_nonzero(l7_FC))
                             true_idx = np.where(_top5[0]==True)[0][0]
                             self.logger.debug("logit at %d: %s", true_idx,
                                               str(logits[true_idx]))
