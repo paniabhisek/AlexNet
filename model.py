@@ -34,7 +34,7 @@ class AlexNet:
         self.lsvrc2010 = LSVRC2010(self.path, batch_size)
         self.num_classes = len(self.lsvrc2010.wnid2label)
 
-        self.learning_rate = 0.001
+        self.lr = 0.001
         self.momentum = 0.9
         self.lambd = tf.constant(0.0005, name='lambda')
         self.input_shape = (None, 227, 227, 3)
@@ -59,6 +59,10 @@ class AlexNet:
                                           name='input_image')
         self.labels = tf.placeholder(tf.float32, shape=self.output_shape,
                                      name='output')
+        self.learning_rate = tf.placeholder(tf.float32, shape=(),
+                                            name='learning_rate')
+        self.dropout = tf.placeholder(tf.float32, shape=(),
+                                      name='dropout')
 
     def create_tf_variables(self):
         """
@@ -238,8 +242,8 @@ class AlexNet:
                                                   #biases_initializer=tf.ones_initializer())
 
         # Dropout layer
-        l6_keep_prob = tf.constant(0.5, tf.float32)
-        l6_dropout = tf.nn.dropout(l6_FC, l6_keep_prob,
+        #l6_keep_prob = tf.constant(self.dropout, tf.float32)
+        l6_dropout = tf.nn.dropout(l6_FC, self.dropout,
                                    name='l6_dropout')
 
         # Layer 7 Fully connected layer
@@ -248,8 +252,8 @@ class AlexNet:
         #biases_initializer=tf.ones_initializer())
 
         # Dropout layer
-        l7_keep_prob = tf.constant(0.5, tf.float32)
-        l7_dropout = tf.nn.dropout(self.l7_FC, l7_keep_prob,
+        #l7_keep_prob = tf.constant(self.dropout, tf.float32)
+        l7_dropout = tf.nn.dropout(self.l7_FC, self.dropout,
                                    name='l7_dropout')
 
         # final layer before softmax
@@ -376,25 +380,30 @@ class AlexNet:
                     # in subsequent epoch
                     if batch_i >= ceil(len(self.lsvrc2010.image_names) / self.batch_size):
                         break
-                    (_, loss, acc, top5_acc, global_step,
-                     _) = sess.run([self.optimizer, self.loss,
-                                    self.accuracy, self.top5_accuracy,
+                    (_, global_step,
+                     _) = sess.run([self.optimizer,
                                     self.global_step, self.increment_batch_op],
                                    feed_dict = {
                                        self.input_image: images,
-                                       self.labels: labels
+                                       self.labels: labels,
+                                       self.learning_rate: self.lr,
+                                       self.dropout: 0.5
                                    })
 
-                    losses.append(loss)
-                    accuracies.append(acc)
                     if batch_i % batch_step == 0:
-                        (summary, logits,
-                         _top5, l7_FC) = sess.run([self.merged,
-                                                   self.logits, self.top5_correct, self.l7_FC],
-                                                  feed_dict = {
-                                                      self.input_image: images,
-                                                      self.labels: labels
-                                                  })
+                        (summary, loss, acc, top5_acc, _top5,
+                         logits, l7_FC) = sess.run([self.merged, self.loss,
+                                                    self.accuracy, self.top5_accuracy,
+                                                    self.top5_correct,
+                                                    self.logits, self.l7_FC],
+                                                   feed_dict = {
+                                                       self.input_image: images,
+                                                       self.labels: labels,
+                                                       self.learning_rate: self.lr,
+                                                       self.dropout: 1.0
+                                                   })
+                        losses.append(loss)
+                        accuracies.append(acc)
                         summary_writer_train.add_summary(summary, global_step)
                         summary_writer_train.flush()
                         end = time.time()
@@ -416,18 +425,20 @@ class AlexNet:
 
                     if batch_i % val_step == 0:
                         images_val, labels_val = self.lsvrc2010.get_batch_val
-                        (summary,
-                         acc, top5_acc) = sess.run([self.merged,
+                        (summary, acc, top5_acc,
+                         loss) = sess.run([self.merged,
                                                     self.accuracy,
-                                                    self.top5_accuracy],
+                                                    self.top5_accuracy, self.loss],
                                                    feed_dict = {
                                                        self.input_image: images_val,
-                                                       self.labels: labels_val
+                                                       self.labels: labels_val,
+                                                       self.learning_rate: self.lr,
+                                                       self.dropout: 1.0
                                                    })
                         summary_writer_val.add_summary(summary, global_step)
                         summary_writer_val.flush()
-                        self.logger.info("Validation - Accuracy: %f Top 5 Accuracy: %f",
-                                         acc, top5_acc)
+                        self.logger.info("Validation - Accuracy: %f Top 5 Accuracy: %f Loss: %f",
+                                         acc, top5_acc, loss)
 
                         cur_loss = sum(losses) / len(losses)
                         if cur_loss < best_loss:
