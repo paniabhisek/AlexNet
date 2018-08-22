@@ -386,6 +386,9 @@ class AlexNet:
                                        self.dropout: 0.5
                                    })
 
+                    if global_step == 150000:
+                        self.lr = 0.0001 # Halve the learning rate
+
                     if batch_i % batch_step == 0:
                         (summary, loss, acc, top5_acc, _top5,
                          logits, l7_FC) = sess.run([self.merged, self.loss,
