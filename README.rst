@@ -168,3 +168,19 @@ For the commit ``d0cfd566157d7c12a1e75c102fff2a80b4dc3706``:
 
 - screenlog.0: The log file after running ``python model.py <path-to-dataset>`` in `screen <http://man7.org/linux/man-pages/man1/screen.1.html>`_
 - model and logs: `google drive <https://drive.google.com/drive/folders/0B1yOxWSsHpvRQ2U0VEJWS25LTjQ>`_
+
+Here are the graphs:
+
+**top1 accuracy**:
+
+.. image:: pictures/top1-acc.png
+
+**top5 accuracy**:
+
+.. image:: pictures/top5-acc.png
+
+**loss**:
+
+.. image:: pictures/loss.png
+
+**Note**: Near global step no 300k, I stopped it mistakenly. At that point it was 29 epochs and some hundered batches. But when I started again it started from epoch no 29 and batch no 0(as there wasn't any improvement for the few hundered batches). That's why the graph got little messed up. But you get the idea.
