@@ -289,6 +289,12 @@ class LSVRC2010:
 
     def get_5_patches(self, image_path):
         """
+        Get 5 patches for an image.
+
+        It returns a list of 5 patches(top left, top right,
+        bottom left, bottom right and center) of an image.
+
+        :param image_path: the path of an image
         """
         img = Image.open(image_path)
         # Resize the shorter size to 256
@@ -318,17 +324,49 @@ class LSVRC2010:
         for i, img in enumerate(img_crop):
             patches[i] = preprocess(lambda self, img: img, False)(self, img_crop[i])
 
-        return np.array(patches)
+        return patches
 
     @property
-    def gen_image_test(self):
+    def gen_batch_test(self):
         """
         A generator which will give test images one by one
         after doing preproessing.
+
+        For each batch return X, Y
+        Where X is a list of 5 patches: each patch will have
+        batch no of images. Y is the labels which size is batch size.
         """
-        for image, label in self.image_names_test.items():
-            _images = self.get_5_patches(self.image_path(image, test=True))
-            yield _images, self.one_hot([label])
+        logger_test = logging.getLogger('AlexNetTest.LSVRC2010')
+        batch_size = 128
+        images = list(self.image_names_test.keys())
+        def get_batch(idx):
+            """
+            Get current batch of data give batch index.
+
+            :param idx: The batch index in the dataset
+            """
+            logger_test.debug("Reading batch for index: %d", idx)
+            _images = images[idx * batch_size: (idx + 1) * batch_size]
+
+            X = [[] for _ in range(5)]
+            Y = []
+            for image in _images:
+                patches = self.get_5_patches(self.image_path(image, test=True))
+                for i, patch in enumerate(patches):
+                    X[i].append(patch)
+                Y.append(self.image_names_test[image])
+
+            for i in range(len(X)):
+                X[i] = np.array(X[i])
+
+            return X, np.array(Y)
+
+        source = (get_batch, len(self.image_names_test), batch_size)
+        store = Store(source, 10)
+
+        batch = store.read()
+        for i in range(ceil(len(self.image_names_test) / batch_size)):
+            yield next(batch)
 
         raise StopIteration
 

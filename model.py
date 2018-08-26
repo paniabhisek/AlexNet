@@ -454,44 +454,44 @@ class AlexNet:
         self.logger_test.info("In Test: Building the graph...")
         self.build_graph()
 
-        avg_logits = tf.reshape(tf.reduce_mean(self.logits, axis=0),
-                                shape=[1, self.logits.shape.as_list()[1]])
-
-        correct = tf.equal(tf.argmax(avg_logits, 1), tf.argmax(self.labels, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-
-        top5_correct = tf.nn.in_top_k(avg_logits, tf.argmax(self.labels, 1), 5)
-        top5_accuracy = tf.reduce_mean(tf.cast(top5_correct, tf.float32))
-
         init = tf.global_variables_initializer()
 
         saver = tf.train.Saver()
-        acc = 0
-        top5_acc = 0
+        top1_count, top5_count, count = 0, 0, 0
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             self.restore_model(sess, saver)
 
-            test_data = self.lsvrc2010.gen_image_test
             start = time.time()
-            for i, (images, label) in enumerate(test_data):
-                (_acc,
-                 _top5_acc) = sess.run([accuracy, top5_accuracy],
-                                       feed_dict = {
-                                           self.input_image: images,
-                                           self.labels: label,
-                                           self.dropout: 1.0
-                                       })
-                acc += _acc
-                top5_acc += _top5_acc
+            batch = self.lsvrc2010.gen_batch_test
+            for i, (patches, labels) in enumerate(batch):
+                count += patches[0].shape[0]
+                avg_logits = np.zeros((patches[0].shape[0], self.num_classes))
+                for patch in patches:
+                    logits = sess.run(self.logits,
+                                      feed_dict = {
+                                          self.input_image: patch,
+                                          self.dropout: 1.0
+                                      })
+                    avg_logits += logits
+                avg_logits /= len(patches)
+                top1_count += np.sum(np.argmax(avg_logits, 1) == labels)
+                top5_count += np.sum(avg_logits.argsort()[:, -5:] == \
+                                     np.repeat(labels, 5).reshape(patches[0].shape[0], 5))
+
                 if i % step == 0:
                     end = time.time()
-                    self.logger_test.info("Time: %f "
-                                          "Accuracy: %f Avg Accuracy: %f "
+                    self.logger_test.info("Time: %f Step: %d "
+                                          "Avg Accuracy: %f "
                                           "Avg Top 5 Accuracy: %f",
-                                          end - start,
-                                          acc, acc / (i + 1),
-                                          top5_acc / (i + 1))
+                                          end - start, i,
+                                          top1_count / count,
+                                          top5_count / count)
                     start = time.time()
+
+            self.logger_test.info("Final - Avg Accuracy: %f "
+                                  "Avg Top 5 Accuracy: %f",
+                                  top1_count / count,
+                                  top5_count / count)
 
 if __name__ == '__main__':
     import argparse
