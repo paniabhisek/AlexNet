@@ -154,7 +154,7 @@ def resize(img):
 
     return img
 
-def preprocess(function):
+def preprocess(function, resize_crop=True):
     def crop(image, image_size):
         """
         Randomly crop `image_size` of the the `image`
@@ -173,8 +173,9 @@ def preprocess(function):
         self = args[0]
 
         img = function(*args, **kwargs)
-        img = resize(img)
-        img = crop(img, self.image_size)
+        if resize_crop:
+            img = resize(img)
+            img = crop(img, self.image_size)
         img.load()
 
         npimg = np.asarray(img, dtype = "int32")

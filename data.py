@@ -56,6 +56,7 @@ class LSVRC2010:
         self.base_dir = path
         self.train_dir = os.path.join(path, 'ILSVRC2010_img_train')
         self.val_dir = os.path.join(path, 'ILSVRC2010_img_val')
+        self.test_dir = os.path.join(path, 'ILSVRC2010_img_test')
 
         # Store the folder name to label info
         self.wnid2label = {}
@@ -69,6 +70,9 @@ class LSVRC2010:
 
         self.image_names_val = {}
         self.find_image_names_val()
+
+        self.image_names_test = {}
+        self.find_image_names_test()
 
         if not os.path.exists('mean.pkl'):
             gen_mean_activity(self.train_dir)
@@ -143,7 +147,17 @@ class LSVRC2010:
                 self.image_names_val[image] = \
                     self.wnid2label[self.lsvrcid2wnid[int(lsvrcid.strip())]]
 
-    def image_path(self, image_name, val=False):
+    def find_image_names_test(self):
+        """
+        Find the label of each test image
+        """
+        with open(os.path.join(self.base_dir, 'devkit-1.0', 'data',
+                               'ILSVRC2010_test_ground_truth.txt')) as f:
+            for image, lsvrcid in zip(sorted(os.listdir(self.test_dir)), f):
+                self.image_names_test[image] = \
+                    self.wnid2label[self.lsvrcid2wnid[int(lsvrcid.strip())]]
+
+    def image_path(self, image_name, val=False, test=False):
         """
         Return full image path
         e.g. ~/datasets/ILSVRC2010/ILSVRC2010_img_train/n03854065/n03854065_297.JPEG
@@ -154,6 +168,9 @@ class LSVRC2010:
         """
         if val:
             return os.path.join(self.val_dir,
+                                image_name)
+        if test:
+            return os.path.join(self.test_dir,
                                 image_name)
         return os.path.join(self.train_dir,
                             self.image_names[image_name].folder,
@@ -269,6 +286,51 @@ class LSVRC2010:
         Y = self.cur_batch_labels(_images, True)
 
         return X, Y
+
+    def get_5_patches(self, image_path):
+        """
+        """
+        img = Image.open(image_path)
+        # Resize the shorter size to 256
+        if img.width < 256:
+            img = img.resize((256, img.height))
+        if img.height < 256:
+            img = img.resize((img.width, 256))
+
+        # Take 5 patches(top left, top right, bottom left, bottom right, center)
+        img_crop = [None] * 5
+        img_crop[0] = img.crop((0, 0, self.image_size[0],
+                                self.image_size[1]))
+        img_crop[1] = img.crop((img.width - self.image_size[0], 0,
+                                img.width - self.image_size[0] + self.image_size[1],
+                                self.image_size[1]))
+        img_crop[2] = img.crop((0, img.height - self.image_size[1],
+                                self.image_size[0], img.height))
+        img_crop[3] = img.crop((img.width - self.image_size[0],
+                                img.height - self.image_size[1],
+                                img.width, img.height))
+        img_crop[4] = img.crop((img.width // 2 - self.image_size[0] // 2,
+                                img.height // 2 - self.image_size[1] // 2,
+                                img.width // 2 - self.image_size[0] // 2 + self.image_size[0],
+                                img.height // 2 - self.image_size[1] // 2 + self.image_size[1]))
+
+        patches = [None] * 5
+        for i, img in enumerate(img_crop):
+            patches[i] = preprocess(lambda self, img: img, False)(self, img_crop[i])
+
+        return np.array(patches)
+
+    @property
+    def gen_image_test(self):
+        """
+        A generator which will give test images one by one
+        after doing preproessing.
+        """
+        for image, label in self.image_names_test.items():
+            _images = self.get_5_patches(self.image_path(image, test=True))
+            yield _images, self.one_hot([label])
+
+        raise StopIteration
 
 if __name__ == '__main__':
     import argparse
