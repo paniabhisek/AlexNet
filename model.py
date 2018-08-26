@@ -502,8 +502,13 @@ if __name__ == '__main__':
                         type=lambda x: x != 'False', default=True,
                         required=False,
                         help='Resume training (True or False)')
+    parser.add_argument('--train', help='Train AlexNet')
+    parser.add_argument('--test', help='Test AlexNet')
     args = parser.parse_args()
 
     alexnet = AlexNet(args.image_path, 128, resume=args.resume)
-    alexnet.train(50)
 
+    if args.train == 'true':
+        alexnet.train(50)
+    elif args.test == 'true':
+        alexnet.test()
