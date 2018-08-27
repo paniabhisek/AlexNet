@@ -303,6 +303,9 @@ class LSVRC2010:
         if img.height < 256:
             img = img.resize((img.width, 256))
 
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
         # Take 5 patches(top left, top right, bottom left, bottom right, center)
         img_crop = [None] * 5
         img_crop[0] = img.crop((0, 0, self.image_size[0],
