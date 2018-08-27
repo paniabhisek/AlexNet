@@ -184,3 +184,10 @@ Here are the graphs:
 .. image:: pictures/loss.png
 
 **Note**: Near global step no 300k, I stopped it mistakenly. At that point it was 29 epochs and some hundered batches. But when I started again it started from epoch no 29 and batch no 0(as there wasn't any improvement for the few hundered batches). That's why the graph got little messed up. But you get the idea.
+
+With the current setting I've got the following accuracies for test dataset:
+
+- Top1 accuracy: **47.9513%**
+- Top5 accuracy: **71.8840%**
+
+**Note**: To increase test accuracy, train the model for more epochs with lowering the learning rate when validation accuracy doesn't improve. I'll come back to this when I'll have more GPU hours.
