@@ -3,10 +3,13 @@ AlexNet
 
 This is the ``tensorflow`` implementation of `this paper <https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf>`_. For a more efficient implementation for GPU, head over to `here <http://code.google.com/p/cuda-convnet/>`_.
 
-Dataset can be found `here <http://www.image-net.org/challenges/LSVRC/2010/>`_ (But you need your university email id to get it).
+Dataset:
+
+Olga Russakovsky*, Jia Deng*, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein, Alexander C. Berg and Li Fei-Fei. (* = equal contribution) **ImageNet Large Scale Visual Recognition Challenge**. arXiv:1409.0575, 2014. `paper <http://arxiv.org/abs/1409.0575>`_ | `bibtex <http://ai.stanford.edu/~olga/bibtex/ILSVRCarxiv14.bib>`_
 
 Dataset info:
 
+- Link: `ILSVRC2010 <http://www.image-net.org/challenges/LSVRC/2010/download-all-nonpub>`_
 - Training size: *1261406 images*
 - Validation size: *50000 images*
 - Dataset size: *124 GB*
@@ -171,6 +174,9 @@ For the commit ``d0cfd566157d7c12a1e75c102fff2a80b4dc3706``:
 
 Here are the graphs:
 
+- *red line*: training
+- *blue line*: validation
+
 **top1 accuracy**:
 
 .. image:: pictures/top1-acc.png
@@ -182,6 +188,8 @@ Here are the graphs:
 **loss**:
 
 .. image:: pictures/loss.png
+
+*Incase the above graphs are not visible clearly in terms of numbers on Github, please download it to your local computer, it should be clear there.*
 
 **Note**: Near global step no 300k, I stopped it mistakenly. At that point it was 29 epochs and some hundered batches. But when I started again it started from epoch no 29 and batch no 0(as there wasn't any improvement for the few hundered batches). That's why the graph got little messed up. But you get the idea.
 
