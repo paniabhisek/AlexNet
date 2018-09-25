@@ -94,10 +94,10 @@ class LSVRC2010:
         """
         Store the mapping of ILSVRC2010_ID to WNID
 
-        Fore more information about what ILSVRC2010_ID
-        and WNID is please read the devkit-1.0 readme
+        For more information about what ILSVRC2010_ID
+        and WNID is, read the devkit-1.0 readme
         that you can find for ILSVRC2010.
-        Fore short, WNID are the folder names in the training
+        For short, WNID are the folder names in the training
         folder and ILSVRC2010_ID is an id that is assigned
         to each folder category to uniquely identify the category
         for that folder
@@ -110,6 +110,7 @@ class LSVRC2010:
         synsets = mat['synsets']
 
         for i in range(len(synsets)):
+            # matlab datas are not coming nicely for python objects ;)
             self.lsvrcid2wnid[synsets[i][0][0][0][0]] = str(synsets[i][0][1][0])
 
     def find_image_names(self):

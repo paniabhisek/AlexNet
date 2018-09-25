@@ -506,7 +506,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', help='Test AlexNet')
     args = parser.parse_args()
 
-    alexnet = AlexNet(args.image_path, 128, resume=args.resume)
+    alexnet = AlexNet(args.image_path, batch_size=128, resume=args.resume)
 
     if args.train == 'true':
         alexnet.train(50)
