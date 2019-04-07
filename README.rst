@@ -178,7 +178,7 @@ The model has been trained for nearly 2 days. The top5 accuracy for validation w
 For the commit ``d0cfd566157d7c12a1e75c102fff2a80b4dc3706``:
 
 - screenlog.0: The log file after running ``python model.py <path-to-training-data> --train true`` in `screen <http://man7.org/linux/man-pages/man1/screen.1.html>`_
-- model and logs: `google drive <https://drive.google.com/drive/folders/0B1yOxWSsHpvRQ2U0VEJWS25LTjQ>`_
+- model and logs: `google drive <https://drive.google.com/drive/folders/14olIl-cxSpXovDkhxZglcx9jDVEcVP2E>`_
 
 Here are the graphs:
 
