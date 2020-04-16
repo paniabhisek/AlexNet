@@ -1,3 +1,5 @@
+**Final Edit**: tensorflow version: 1.7.0. The following text is written as per the reference as I was not able to reproduce the result. Key link in the following text: `bias of 1 in fully connected layers introduced dying relu problem <https://datascience.stackexchange.com/questions/37314/bias-of-1-in-fully-connected-layers-introduced-dying-relu-problem>`_. Key suggestion from `here <https://github.com/dontfollowmeimcrazy/imagenet/blob/master/tf/models/alexnet.py>`_
+
 AlexNet
 =======
 
@@ -14,12 +16,12 @@ Dataset info:
 - Validation size: *50000 images*
 - Test size: *150000 images*
 - Dataset size: *124 GB*
+- GPU: *8 GB* GPU
+- GPU Device: Quadro P4000
 
 To save up time:
 
-I got one corrupted image (``n02487347_1956.JPEG``). The error read: ``Can not identify image file '/path/to/image/n02487347_1956.JPEG n02487347_1956.JPEG``. This happened when I read the image using ``PIL``. Before using this code, please make sure you can open ``n02487347_1956.JPEG`` using ``PIL``. If not delete the image, you won't loose anything if you delete 1 image out of 1 million.
-
-So I trained on ``1261405`` images using *8 GB* GPU.
+I got one corrupted image: ``n02487347_1956.JPEG``. The error read: ``Can not identify image file '/path/to/image/n02487347_1956.JPEG n02487347_1956.JPEG``. This happened when I read the image using ``PIL``. Before using this code, please make sure you can open ``n02487347_1956.JPEG`` using ``PIL``. If not delete the image.
 
 How to Run
 ==========
@@ -42,15 +44,13 @@ Some of the logs:
     AlexNet - INFO - Time: 0.087481 Epoch: 2 Batch: 7821 Loss: 6.830358 Accuracy: 0.002981
     AlexNet - INFO - Time: 0.089649 Epoch: 3 Batch: 7821 Loss: 6.830358 Accuracy: 0.002981
 
-So the next task is to add dropout layers and/or data augmentation methods. Data augmentation method will increase the training time substantially as compared to adding dropout layers. So let's first add dropout layers in the last two fully connected layers.
+Addition of dropout layer and/or data augmentation:
 
-*One eternity later...*
+The model still overfits even if dropout layers has been added and the accuracies are almost similar to the previous one. After adding data augmentation method: sometime it goes to 100% and sometime it stays at 0% in the first epoch itself.
 
-The model still overfits even if dropout layers has been added and the accuracies are almost similar to the previous one. Adding data augmentation method wasn't a rescue either: Sometime it goes to 100% and sometime it stays at 0% in the first epoch itself.
+By mistakenly I have added ``tf.nn.conv2d`` which doesn't have any activation function by default as in the case for ``tf.contrib.layers.fully_connected`` (default is ``relu``). So it makes sense after 3 epochs there is no improvement in the accuracy.
 
-After digging deeper it turns out that ``tf.nn.conv2d`` layer doesn't have any activation function by default as in the case for ``tf.contrib.layers.fully_connected`` (default is ``relu``). So basically I had 1 linear function and 3 non linear functions in the entire architecture as opposed to 8 non linear functions (as given in the paper). So it makes sense after 3 epochs there is no improvement in the accuracy.
-
-Once ``relu`` has been added, the model was looking good. In the first epoch, few batch accuracies were 0.00781, 0.0156 with lot of other batches were 0s. In the second epoch the number of 0s decreased. So maybe the model will behave properly with other learning rates.
+Once ``relu`` has been added, the model was looking good. In the first epoch, few batch accuracies were 0.00781, 0.0156 with lot of other batches were 0s. In the second epoch the number of 0s decreased.
 
 After changing the learning rate to ``0.001``:
 
@@ -83,27 +83,25 @@ After changing the learning rate to ``0.001``:
     2018-08-12 09:37:05,975 - AlexNet - INFO - Time: 7.986927 Epoch: 0 Batch: 160 Loss: 6.908568 Avg loss: 2049.059589 Accuracy: 0.000000 Avg Accuracy: 0.001043 Top 5 Accuracy: 1.000000
     2018-08-12 09:37:14,373 - AlexNet - INFO - Time: 8.396514 Epoch: 0 Batch: 170 Loss: 6.909007 Avg loss: 1929.635595 Accuracy: 0.000000 Avg Accuracy: 0.001051 Top 5 Accuracy: 1.000000
 
-Which is kind of scary: **The accuracy for current batch is ``0.000`` while the top 5 accuracy is ``1.000``**. That made me check my code for any implementation error (again!). The graph looked fine in ``tensorboard``. After checking the code for couple of hours intensely, I didn't found any error. So one thing for sure!. I'm not able to find bug in my own code or something serious is going on. Now it was time to check the output of the final layer.
+**The accuracy for current batch is ``0.000`` while the top 5 accuracy is ``1.000``**. That made me check my code for any implementation error (again!). The graph looked fine in ``tensorboard``. I didn't found any error.
 
-Guess what! Out of 1000 numbers for a single training example, all are 0s except few (3 or 4). Ahh! there you are!
+The output of final layer: out of 1000 numbers for a single training example, all are 0s except few (3 or 4).
 
-What a relief!! At least this time there was no implementation error.
-
-The ``relu`` activation function will make any negative numbers to zero. if the final layer produces 997 of them 0s and 3 non 0s, then ``tf.nn.in_top_k`` will think that this example's output is in top5 as all 997 of them are in 4th position. So there is nothing wrong in there, but one problem though, the training will be substantially slow or it might not converge at all. It will be slow as the derivative in the 0 case is 0 where learning is difficult. If we would have got considerable amount of non 0s then it would be faster then other known (``tanh``, ``signmoid``) activation function.
+The ``relu`` activation function will make any negative numbers to zero. if the final layer produces 997 of them 0s and 3 non 0s, then ``tf.nn.in_top_k`` will think that this example's output is in top5 as all 997 of them are in 4th position. So there is nothing wrong in there, but one problem though, the training will be substantially slow or it might not converge at all. If we would have got considerable amount of non 0s then it would be faster then other known (``tanh``, ``signmoid``) activation function.
 
 The output layer is producing lot of 0s which means it is producing lot of negative numbers before ``relu`` is applied.
 
 A couple things can be done:
 
 1. Reduce standard deviation to 0.01(currently 0.1), which will make the weights closer to 0 and maybe it will produce some more positive values
-2. Apply local response normalization(not applying currently) and make standard deviation 0.01
-3. Use L2 regularization methods to penalize the weights for the way they are, in the hope they will be positive, and make standard deviation 0.01.
+2. Apply local response normalization(not applying currently) and make standard deviation to 0.01
+3. Use L2 regularization methods to penalize the weights for the way they are, in the hope they will be positive, and make standard deviation to 0.01.
 
 Turns out none of them worked:
 
 The next thing I could think of is to change the **Optimzer**. I was using ``tf.train.AdamOptimizer`` (as it is more recent and it's faster) but the paper is using **Gradient Descent with Momentum**. After changing the optimizer to ``tf.train.MomentumOptimizer`` *only* didn't improve anything.
 
-But when I changed the optimizer to ``tf.train.MomentumOptimizer`` *along with* standard deviation to ``0.01``, things started to change for the better. The top 5 accuracy was no longer ``1.000`` in the initial phase of training when top 1 accuracy was ``0.000``. A lot of positive values can also be seen in the output layer.
+But when I changed the optimizer to ``tf.train.MomentumOptimizer`` *along with* standard deviation to ``0.01``, things started to change. The top 5 accuracy was no longer ``1.000`` in the initial phase of training when top 1 accuracy was ``0.000``. A lot of positive values can also be seen in the output layer.
 
 .. code::
 
@@ -171,7 +169,7 @@ Atleast this will ensure training will not be slower.
 
 Turns out changing the *optimizer* didn't improve the model, instead it only slowed down training. Near the end of epoch 1, the top 5 accuracy again went to 1.0000.
 
-Final thing that I searched was `this <https://github.com/dontfollowmeimcrazy/imagenet/blob/master/tf/models/alexnet.py>`_ guy's setting of bias, where he was using ``0`` as bias for fully connected layers. But the paper has strictly mentionied to use 1 as biases in fully connected layers. Anyway I had to try. Guess what? the model didn't overfit, it didn't create lot of 0s after the end of graph, loss started decreasing really well, accuracies were looking nice!! I don't fully understand at the moment why the bias in fully connected layers caused the problem. I've created a question on `datascience.stackexchange.com <https://datascience.stackexchange.com/questions/37314/bias-of-1-in-fully-connected-layers-introduced-dying-relu-problem>`_. If anyone knows how the bias helped the network to learn nicely, please comment or post your answer there! It'll surely help me and other folks who are struggling on the same problem.
+Final thing that I searched was `his <https://github.com/dontfollowmeimcrazy/imagenet/blob/master/tf/models/alexnet.py>`_  setting of bias, where he was using ``0`` as bias for fully connected layers. But the paper has strictly mentionied to use 1 as biases in fully connected layers. The model didn't overfit, it didn't create lot of 0s after the end of graph, loss started decreasing really well, accuracies were looking nice!! I don't fully understand at the moment why the bias in fully connected layers caused the problem. I've created a question on `datascience.stackexchange.com <https://datascience.stackexchange.com/questions/37314/bias-of-1-in-fully-connected-layers-introduced-dying-relu-problem>`_. If anyone knows how the bias helped the network to learn nicely, please comment or post your answer there! It'll surely help me and other folks who are struggling on the same problem.
 
 The model has been trained for nearly 2 days. The top5 accuracy for validation were fluctuating between nearly 75% to 80% and top1 accuracy were fluctuating between nearly 50% to 55% at which point I stopped training.
 
@@ -199,11 +197,11 @@ Here are the graphs:
 
 *Incase the above graphs are not visible clearly in terms of numbers on Github, please download it to your local computer, it should be clear there.*
 
-**Note**: Near global step no 300k, I stopped it mistakenly. At that point it was 29 epochs and some hundered batches. But when I started again it started from epoch no 29 and batch no 0(as there wasn't any improvement for the few hundered batches). That's why the graph got little messed up. But you get the idea.
+**Note**: Near global step no 300k, I stopped it mistakenly. At that point it was 29 epochs and some hundered batches. But when I started again it started from epoch no 29 and batch no 0(as there wasn't any improvement for the few hundered batches). That's why the graph got little messed up.
 
 With the current setting I've got the following accuracies for test dataset:
 
 - Top1 accuracy: **47.9513%**
 - Top5 accuracy: **71.8840%**
 
-**Note**: To increase test accuracy, train the model for more epochs with lowering the learning rate when validation accuracy doesn't improve. I'll come back to this when I'll have more GPU hours.
+**Note**: To increase test accuracy, train the model for more epochs with lowering the learning rate when validation accuracy doesn't improve.
